@@ -253,6 +253,18 @@ export default function BanditosApp() {
       setBooting(false);
     };
     init();
+
+    // Listen for auth state changes (handles refresh/back navigation)
+    if(supabase){
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if(event === "SIGNED_OUT"){ setCurrentUser(null); return; }
+        if(session?.user && event === "SIGNED_IN"){
+          const { data:profile } = await supabase.from("profielen").select("*").eq("id",session.user.id).single();
+          if(profile) setCurrentUser(profile);
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
   },[]);
 
   const logout = async () => {
@@ -331,7 +343,10 @@ function AppShell({ currentUser, onLogout }) {
 
   // ── Load + realtime ──
   useEffect(()=>{
-    if(!supabase) return;
+    if(!supabase){ 
+      console.warn("Supabase niet gekoppeld — check VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY in Vercel");
+      return; 
+    }
     loadAll();
     const subs = [
       supabase.channel("ch_msg").on("postgres_changes",{event:"*",schema:"public",table:"berichten",filter:`gezin_code=eq.${gc}`},()=>loadMessages()).subscribe(),
@@ -344,7 +359,7 @@ function AppShell({ currentUser, onLogout }) {
     return ()=>subs.forEach(s=>supabase.removeChannel(s));
   },[gc]);
 
-  const loadAll     = ()=>Promise.all([loadMessages(),loadTasks(),loadItems(),loadEvents(),loadMeals(),loadFamily()]);
+  const loadAll     = ()=>Promise.all([loadMessages(),loadTasks(),loadItems(),loadEvents(),loadMeals(),loadFamily()]).catch(e=>{ console.error("Laden mislukt:", e); setAppError(e.message); });
   const loadMessages= async()=>{ const{data}=await supabase.from("berichten").select("*").eq("gezin_code",gc).order("verzonden_op",{ascending:true}).limit(200); setMessages(data||[]); };
   const loadTasks   = async()=>{ const{data}=await supabase.from("taken").select("*").eq("gezin_code",gc).order("aangemaakt_op",{ascending:false}); setTasks(data||[]); };
   const loadItems   = async()=>{ const{data}=await supabase.from("items").select("*").eq("gezin_code",gc); if(!data)return; const g={boodschappen:[],health:[],cadeaus:[],sport:[],huis:[]}; data.forEach(i=>{if(g[i.lijst])g[i.lijst].push(i);}); setAllItems(g); };
@@ -485,7 +500,20 @@ function AppShell({ currentUser, onLogout }) {
   const AV = ({naam,size=30,fsize=14})=>{ const m=getMember(naam); return(<div style={{ width:size,height:size,borderRadius:size/2,background:m.kleur||"#8E8E93",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fsize,overflow:"hidden",flexShrink:0 }}>{m.avatar_url?<img src={m.avatar_url} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:(m.emoji||naam?.[0]||"?")}</div>); };
 
   return (
-    <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:"100vh",
+    if(appError) return (
+      <div style={{ minHeight:"100vh", background:"#1a0a00", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16, padding:24 }}>
+        <div style={{ fontSize:48 }}>⚠️</div>
+        <div style={{ color:"#fff", fontSize:18, fontWeight:700, textAlign:"center" }}>Er ging iets mis</div>
+        <div style={{ color:"rgba(255,255,255,0.5)", fontSize:13, textAlign:"center", maxWidth:300 }}>{appError}</div>
+        <div style={{ color:"rgba(255,165,0,0.8)", fontSize:12, textAlign:"center", maxWidth:320, lineHeight:1.6 }}>
+          Controleer of VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY correct zijn ingesteld in Vercel → Settings → Environment Variables
+        </div>
+        <button onClick={()=>{ setAppError(null); if(supabase) loadAll(); }} style={{ background:"#FF6B35", border:"none", borderRadius:12, padding:"12px 24px", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", marginTop:8 }}>Opnieuw proberen</button>
+        <button onClick={onLogout} style={{ background:"transparent", border:"1px solid rgba(255,255,255,0.2)", borderRadius:12, padding:"10px 24px", color:"rgba(255,255,255,0.6)", fontSize:13, cursor:"pointer" }}>Uitloggen</button>
+      </div>
+    );
+
+    return (<div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:"100vh",
       background:"linear-gradient(160deg,#1a0a00,#3d1a00,#1a0000)",
       fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif" }}>
       <div style={{ width:393,height:852,background:"#000",borderRadius:55,
