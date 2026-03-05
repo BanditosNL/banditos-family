@@ -96,9 +96,15 @@ function AuthScreen({ onLogin }) {
       if(!supabase) { setError("Supabase nog niet gekoppeld — zie de handleiding Stap 7"); return; }
       const { data, error:err } = await supabase.auth.signInWithPassword({ email, password:pass });
       if(err) throw err;
-      const { data:profile } = await supabase.from("profielen").select("*").eq("id",data.user.id).single();
-      if(profile) onLogin(profile);
-      else { setPendingUserId(data.user.id); setMode("profile"); }
+      const { data:profile, error:profErr } = await supabase
+        .from("profielen").select("*").eq("id", data.user.id).maybeSingle();
+      if(profile) {
+        onLogin(profile);
+      } else {
+        // No profile yet — go to profile setup
+        setPendingUserId(data.user.id);
+        setMode("profile");
+      }
     } catch(e) { setError(e.message||"Inloggen mislukt"); }
     finally { setLoading(false); }
   };
