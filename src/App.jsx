@@ -184,14 +184,29 @@ function ProfileSetup({ userId, onDone }) {
     try {
       let avatar_url = null;
       if(supabase && avatarFile && userId) {
-        const ext = avatarFile.name.split(".").pop();
-        const path = `avatars/${userId}.${ext}`;
-        await supabase.storage.from("diner-fotos").upload(path, avatarFile, { upsert:true });
-        const { data:u } = supabase.storage.from("diner-fotos").getPublicUrl(path);
-        avatar_url = u?.publicUrl || null;
+        try {
+          const ext = avatarFile.name.split(".").pop();
+          const path = `avatars/${userId}.${ext}`;
+          const { error:upErr } = await supabase.storage.from("avatars").upload(path, avatarFile, { upsert:true });
+          if(!upErr) {
+            const { data:u } = supabase.storage.from("avatars").getPublicUrl(path);
+            avatar_url = u?.publicUrl || null;
+          }
+        } catch(uploadErr) {
+          console.warn("Foto upload mislukt, doorgaan zonder foto:", uploadErr);
+          // Continue without photo — not a blocker
+        }
       }
       const profile = { id: userId||`demo-${Date.now()}`, naam:naam.trim(), kleur, emoji, gezin_code:gezinCode.trim().toLowerCase(), avatar_url };
-      if(supabase && userId) await supabase.from("profielen").upsert(profile);
+      if(supabase && userId) {
+        const { error: upsertErr } = await supabase.from("profielen").upsert(profile);
+        if(upsertErr) {
+          console.error("Profiel opslaan mislukt:", upsertErr);
+          setError("Opslaan mislukt: " + upsertErr.message);
+          return;
+        }
+      }
+      // Profile saved — go to app immediately
       onDone(profile);
     } catch(e) { setError(e.message||"Opslaan mislukt"); }
     finally { setLoading(false); }
@@ -245,69 +260,48 @@ function ProfileSetup({ userId, onDone }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function BanditosApp() {
-  const [currentUser,setCurrentUser] = useState(null);
-  const [booting,setBooting]         = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [booting, setBooting] = useState(true);
 
-  useEffect(()=>{
-    // Always boot within 5 seconds max
-    const bootTimeout = setTimeout(()=>setBooting(false), 5000);
+  useEffect(() => {
+    if (!supabase) { setBooting(false); return; }
 
-    const init = async () => {
-      try {
-        if(!supabase){ setBooting(false); clearTimeout(bootTimeout); return; }
-        const { data, error } = await supabase.auth.getSession();
-        if(error) throw error;
-        if(data?.session?.user){
-          const { data:profile } = await supabase
-            .from("profielen")
-            .select("*")
-            .eq("id", data.session.user.id)
-            .maybeSingle();
-          if(profile) setCurrentUser(profile);
-        }
-      } catch(err) {
-        console.warn("Init error:", err);
-      } finally {
+    // Check session once on load
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session?.user) {
+        supabase.from("profielen").select("*")
+          .eq("id", data.session.user.id).maybeSingle()
+          .then(({ data: profile }) => {
+            if (profile) setCurrentUser(profile);
+            setBooting(false);
+          });
+      } else {
         setBooting(false);
-        clearTimeout(bootTimeout);
       }
-    };
-    init();
+    });
 
-    // Listen for auth state changes
-    let unsub = null;
-    if(supabase){
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if(event === "SIGNED_OUT"){ setCurrentUser(null); return; }
-        if(session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")){
-          try {
-            const { data:profile } = await supabase
-              .from("profielen")
-              .select("*")
-              .eq("id", session.user.id)
-              .maybeSingle();
-            if(profile) setCurrentUser(profile);
-          } catch(err) { console.warn("Auth state error:", err); }
-        }
-      });
-      unsub = subscription;
-    }
-    return () => { clearTimeout(bootTimeout); if(unsub) unsub.unsubscribe(); };
-  },[]);
+    // Safety timeout
+    const t = setTimeout(() => setBooting(false), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const handleLogin = (profile) => {
+    setCurrentUser(profile);
+  };
 
   const logout = async () => {
-    if(supabase) await supabase.auth.signOut();
+    if (supabase) await supabase.auth.signOut();
     setCurrentUser(null);
   };
 
-  if(booting) return (
+  if (booting) return (
     <div style={{ minHeight:"100vh", background:"#1a0a00", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
       <div style={{ fontSize:64 }}>🤠</div>
       <div style={{ color:"rgba(255,255,255,0.4)", fontSize:14 }}>Laden...</div>
     </div>
   );
 
-  if(!currentUser) return <AuthScreen onLogin={setCurrentUser} />;
+  if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
   return <AppShell currentUser={currentUser} onLogout={logout} />;
 }
 
