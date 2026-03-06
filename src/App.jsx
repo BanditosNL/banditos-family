@@ -505,12 +505,29 @@ function AppShell({ currentUser, onLogout }) {
   // ── Events ──
   const addEvent = async()=>{
     if(!newEvent.titel.trim()) return;
-    // ensure empty strings become null
-    const e={ ...newEvent, lid:currentUser.naam, gezin_code:gc };
-    if(supabase) await supabase.from("afspraken").insert(e);
-    else setEvents(p=>[...p,{...e,id:Date.now()}]);
-    setNewEvent({ titel:"", datum:fmtDate(calDate), begintijd:"09:00", eindtijd:"10:00", categorie:"familie", locatie:"", notities:"" });
+    // Strip any UI-only fields that don't exist in DB, ensure clean data
+    const { hele_dag, ...rest } = newEvent;
+    const e={ 
+      titel: rest.titel.trim(),
+      datum: rest.datum,
+      begintijd: rest.begintijd || "09:00",
+      eindtijd: rest.eindtijd || "10:00",
+      categorie: rest.categorie || "familie",
+      locatie: rest.locatie || "",
+      notities: rest.notities || "",
+      lid: currentUser.naam,
+      gezin_code: gc
+    };
+    // Optimistic update immediately
+    const tmp = {...e, id: "tmp-"+Date.now()};
+    setEvents(p=>[...p, tmp]);
     setShowAddEvent(false);
+    setNewEvent({ titel:"", datum:fmtDate(calDate), begintijd:"09:00", eindtijd:"10:00", categorie:"familie", locatie:"", notities:"" });
+    if(supabase){
+      const {error} = await supabase.from("afspraken").insert(e);
+      if(error){ console.error("addEvent error:", error); alert("Fout bij opslaan: "+error.message); }
+      else loadEvents();
+    }
   };
   const deleteEvent = async id=>{ setEvents(p=>p.filter(e=>e.id!==id)); if(supabase) await supabase.from("afspraken").delete().eq("id",id); setSelectedEvent(null); };
   const updateEvent = async(id,upd)=>{ setEvents(p=>p.map(x=>x.id===id?{...x,...upd}:x)); if(supabase) await supabase.from("afspraken").update(upd).eq("id",id); setEditEvent(null); setSelectedEvent(null); };
