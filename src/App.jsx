@@ -596,14 +596,6 @@ function AppShell({ currentUser, onLogout }) {
           </div>
         </div>
 
-        {/* Push banner */}
-        {!pushGranted && "Notification" in window && (
-          <div onClick={requestPush} style={{ background:"linear-gradient(135deg,#FF6B35,#FF9F0A)", padding:"10px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", flexShrink:0 }}>
-            <div style={{ color:"#fff", fontSize:13, fontWeight:700 }}>🔔 Zet meldingen aan</div>
-            <div style={{ color:"rgba(255,255,255,0.9)", fontSize:12, background:"rgba(0,0,0,0.2)", padding:"4px 10px", borderRadius:10 }}>Aanzetten →</div>
-          </div>
-        )}
-
         {/* Content */}
         <div style={{ flex:1,background:"#F2F2F7",overflow:"hidden",display:"flex",flexDirection:"column" }}>
 
@@ -791,6 +783,14 @@ function AppShell({ currentUser, onLogout }) {
             </div>
           )}
         </div>
+
+        {/* Push banner — boven tab bar */}
+        {!pushGranted && typeof Notification !== "undefined" && Notification.permission !== "denied" && (
+          <div style={{ background:"linear-gradient(135deg,#FF6B35,#FF9F0A)", padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:15 }}>
+            <div style={{ color:"#fff", fontSize:13, fontWeight:700 }}>🔔 Meldingen aanzetten?</div>
+            <div onClick={requestPush} style={{ color:"#fff", fontSize:13, fontWeight:800, background:"rgba(0,0,0,0.25)", padding:"8px 16px", borderRadius:20, cursor:"pointer", WebkitTapHighlightColor:"transparent", userSelect:"none" }}>Aanzetten</div>
+          </div>
+        )}
 
         {/* Tab bar */}
         <div style={{ background:"#fff",borderTop:"1px solid rgba(0,0,0,0.1)",display:"flex",padding:"6px 4px 20px",flexShrink:0 }}>
