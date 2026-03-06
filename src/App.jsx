@@ -788,7 +788,7 @@ function AppShell({ currentUser, onLogout }) {
     <div style={{ position:"absolute",top:0,left:48,right:0 }}>
       {getEvtsForDate(calDate).map(ev=>{
         const cat=getCatInfo(ev.categorie);
-        const isAllDay=ev.begintijd==="allday";
+        const isAllDay=ev.begintijd==="07:00"&&ev.eindtijd==="23:00";
         const top=0;
         const height=HOURS.length*60; // full grid height
         const [sh,sm]=isAllDay?[7,0]:(ev.begintijd||"09:00").split(":").map(Number);
@@ -849,7 +849,7 @@ function AppShell({ currentUser, onLogout }) {
           {/* Positioned events — including allday */}
           {getEvtsForDate(d).map(ev=>{
             const cat=getCatInfo(ev.categorie);
-            const isAllDay=ev.begintijd==="allday";
+            const isAllDay=ev.begintijd==="07:00"&&ev.eindtijd==="23:00";
             const PX=44/60;
             const totalH=HOURS.length*44;
             if(isAllDay) return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:0,right:0,top:0,height:totalH,background:cat.color+"22",borderLeft:`3px solid ${cat.color}`,cursor:"pointer",zIndex:0,overflow:"hidden" }}>
@@ -937,13 +937,13 @@ function AppShell({ currentUser, onLogout }) {
           <FieldBox><input value={newEvent.titel} onChange={e=>setNewEvent({...newEvent,titel:e.target.value})} placeholder="Titel afspraak..." style={INP} /></FieldBox>
           <FieldBox><input type="date" value={newEvent.datum} onChange={e=>setNewEvent({...newEvent,datum:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox>
           {/* Full day toggle */}
-          <div onClick={()=>setNewEvent({...newEvent,begintijd:newEvent.begintijd==="allday"?"09:00":"allday",eindtijd:newEvent.begintijd==="allday"?"10:00":"allday"})} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fff",borderRadius:10,marginBottom:8,cursor:"pointer" }}>
-            <div style={{ width:24,height:24,borderRadius:12,background:newEvent.begintijd==="allday"?"#007AFF":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s" }}>
-              {newEvent.begintijd==="allday"&&<span style={{ color:"#fff",fontSize:14 }}>✓</span>}
+          <div onClick={()=>setNewEvent({...newEvent,begintijd:newEvent.begintijd==="07:00"?"09:00":"07:00",eindtijd:newEvent.begintijd==="07:00"?"10:00":"23:00",hele_dag:newEvent.begintijd!=="07:00"})} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fff",borderRadius:10,marginBottom:8,cursor:"pointer" }}>
+            <div style={{ width:24,height:24,borderRadius:12,background:newEvent.begintijd==="07:00"?"#007AFF":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s" }}>
+              {newEvent.begintijd==="07:00"&&<span style={{ color:"#fff",fontSize:14 }}>✓</span>}
             </div>
             <div style={{ fontSize:14,fontWeight:600,color:"#000" }}>Hele dag</div>
           </div>
-          {newEvent.begintijd!=="allday"&&<div style={{ display:"flex",gap:8,marginBottom:10 }}>
+          {newEvent.begintijd!=="07:00"&&<div style={{ display:"flex",gap:8,marginBottom:10 }}>
             <FieldBox style={{ flex:1 }}><input type="time" value={newEvent.begintijd} onChange={e=>{
               const start=e.target.value;
               const [sh,sm]=start.split(":").map(Number);
