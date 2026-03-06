@@ -480,13 +480,11 @@ function AppShell({ currentUser, onLogout }) {
     const t=tasks.find(x=>x.id===id); if(!t) return;
     const nowDone=!t.gedaan;
     const gedaan_op=nowDone?new Date().toISOString():null;
-    const upd={ gedaan:nowDone, gedaan_door:nowDone?currentUser.naam:null, gedaan_op };
+    const gedaan_door=nowDone?currentUser.naam:null;
+    const upd={ gedaan:nowDone, gedaan_door, gedaan_op };
+    // Optimistic update with full data so calcPts works immediately
     setTasks(p=>p.map(x=>x.id===id?{...x,...upd}:x));
-    if(supabase){
-      await supabase.from("taken").update(upd).eq("id",id);
-      // Reload to get fresh data including gedaan_op from server
-      loadTasks();
-    }
+    if(supabase) await supabase.from("taken").update(upd).eq("id",id);
   };
   const deleteTask = async id=>{ setTasks(p=>p.filter(x=>x.id!==id)); if(supabase) await supabase.from("taken").delete().eq("id",id); };
   const updateTask = async(id,upd)=>{ setTasks(p=>p.map(x=>x.id===id?{...x,...upd}:x)); if(supabase) await supabase.from("taken").update(upd).eq("id",id); setEditTask(null); };
@@ -778,6 +776,13 @@ function AppShell({ currentUser, onLogout }) {
                 </div>
               </div>
               {calView==="dag"&&<div style={{ flex:1,overflowY:"auto" }}>
+  {/* All-day events at top */}
+  {getEvtsForDate(calDate).filter(ev=>ev.begintijd==="allday").map(ev=>(
+    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ margin:"4px 8px",background:getCatInfo(ev.categorie).color,borderRadius:8,padding:"6px 10px",cursor:"pointer" }}>
+      <div style={{ fontSize:13,fontWeight:800,color:"#fff" }}>📅 {ev.titel} — hele dag</div>
+    </div>
+  ))}
+  {/* Timed grid */}
   <div style={{ position:"relative" }}>
     {HOURS.map(hour=>(
       <div key={hour} style={{ display:"flex",height:60,borderBottom:"1px solid #E5E5EA" }}>
@@ -786,13 +791,11 @@ function AppShell({ currentUser, onLogout }) {
       </div>
     ))}
     <div style={{ position:"absolute",top:0,left:48,right:0 }}>
-      {getEvtsForDate(calDate).map(ev=>{
-        if(ev.begintijd==="allday") return null;
+      {getEvtsForDate(calDate).filter(ev=>ev.begintijd!=="allday").map(ev=>{
         const [sh,sm]=(ev.begintijd||"09:00").split(":").map(Number);
         const [eh,em]=(ev.eindtijd||"10:00").split(":").map(Number);
         const startMins=(sh-7)*60+sm;
-        const endMins=(eh-7)*60+em;
-        const durMins=Math.max(endMins-startMins,30);
+        const durMins=Math.max((eh-7)*60+em-startMins,30);
         const top=(startMins/60)*60;
         const height=(durMins/60)*60;
         const cat=getCatInfo(ev.categorie);
@@ -801,16 +804,58 @@ function AppShell({ currentUser, onLogout }) {
           <div style={{ fontSize:9,color:"rgba(255,255,255,0.85)" }}>{ev.begintijd}–{ev.eindtijd}</div>
         </div>;
       })}
-      {getEvtsForDate(calDate).filter(ev=>ev.begintijd==="allday").map(ev=>{
-        const cat=getCatInfo(ev.categorie);
-        return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ margin:"2px 4px",background:cat.color,borderRadius:6,padding:"4px 8px",cursor:"pointer" }}>
-          <div style={{ fontSize:11,fontWeight:800,color:"#fff" }}>📅 {ev.titel}</div>
-        </div>;
-      })}
     </div>
   </div>
 </div>}
-              {calView==="week"&&<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}><div style={{ display:"flex",background:"#fff",borderBottom:"1px solid #E5E5EA",flexShrink:0 }}><div style={{ width:38 }} />{weekDays.map((d,i)=><div key={i} onClick={()=>{setCalDate(d);setCalView("dag");}} style={{ flex:1,textAlign:"center",padding:"6px 2px",cursor:"pointer" }}><div style={{ fontSize:9,color:"#8E8E93",fontWeight:700,textTransform:"uppercase" }}>{NL_DAYS_SHORT[d.getDay()]}</div><div style={{ width:24,height:24,borderRadius:12,margin:"2px auto",background:isToday(d)?"#007AFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:isToday(d)?"#fff":"#000" }}>{d.getDate()}</div></div>)}</div><div style={{ flex:1,overflowY:"auto" }}>{HOURS.map(hour=><div key={hour} style={{ display:"flex",minHeight:44,borderBottom:"1px solid #F0F0F0" }}><div style={{ width:38,padding:"4px 6px 0",fontSize:9,color:"#8E8E93",fontWeight:600,textAlign:"right",flexShrink:0 }}>{String(hour).padStart(2,"0")}:00</div>{weekDays.map((d,di)=>{ const evs=getEvtsForDate(d).filter(e=>parseInt(e.begintijd)===hour); return<div key={di} style={{ flex:1,padding:"2px 1px",borderLeft:"1px solid #F0F0F0" }}>{evs.map(ev=><div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ background:getCatInfo(ev.categorie).color,color:"#fff",borderRadius:3,padding:"1px 3px",fontSize:8,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1,cursor:"pointer" }}>{ev.titel}</div>)}</div>; })}</div>)}</div></div>}
+              {calView==="week"&&<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
+  {/* Day headers */}
+  <div style={{ display:"flex",background:"#fff",borderBottom:"1px solid #E5E5EA",flexShrink:0 }}>
+    <div style={{ width:38 }} />
+    {weekDays.map((d,i)=><div key={i} onClick={()=>{setCalDate(d);setCalView("dag");}} style={{ flex:1,textAlign:"center",padding:"6px 2px",cursor:"pointer" }}>
+      <div style={{ fontSize:9,color:"#8E8E93",fontWeight:700,textTransform:"uppercase" }}>{NL_DAYS_SHORT[d.getDay()]}</div>
+      <div style={{ width:24,height:24,borderRadius:12,margin:"2px auto",background:isToday(d)?"#007AFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:isToday(d)?"#fff":"#000" }}>{d.getDate()}</div>
+    </div>)}
+  </div>
+  {/* All-day events row */}
+  {weekDays.some(d=>getEvtsForDate(d).some(e=>e.begintijd==="allday"))&&(
+    <div style={{ display:"flex",borderBottom:"1px solid #E5E5EA",background:"#F9F9F9",flexShrink:0 }}>
+      <div style={{ width:38,padding:"4px 2px",fontSize:8,color:"#8E8E93",textAlign:"right",flexShrink:0 }}>dag</div>
+      {weekDays.map((d,di)=>{
+        const allday=getEvtsForDate(d).filter(e=>e.begintijd==="allday");
+        return <div key={di} style={{ flex:1,borderLeft:"1px solid #F0F0F0",padding:"2px 1px" }}>
+          {allday.map(ev=><div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ background:getCatInfo(ev.categorie).color,color:"#fff",borderRadius:3,padding:"1px 3px",fontSize:7,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer",marginBottom:1 }}>{ev.titel}</div>)}
+        </div>;
+      })}
+    </div>
+  )}
+  {/* Timed grid with positioned events */}
+  <div style={{ flex:1,overflowY:"auto" }}>
+    <div style={{ display:"flex" }}>
+      {/* Hour labels */}
+      <div style={{ width:38,flexShrink:0 }}>
+        {HOURS.map(hour=><div key={hour} style={{ height:44,borderBottom:"1px solid #F0F0F0",padding:"4px 6px 0",fontSize:9,color:"#8E8E93",fontWeight:600,textAlign:"right",boxSizing:"border-box" }}>{String(hour).padStart(2,"0")}:00</div>)}
+      </div>
+      {/* Day columns with positioned events */}
+      {weekDays.map((d,di)=>(
+        <div key={di} style={{ flex:1,borderLeft:"1px solid #F0F0F0",position:"relative" }}>
+          {/* Hour grid lines */}
+          {HOURS.map(hour=><div key={hour} style={{ height:44,borderBottom:"1px solid #F0F0F0",boxSizing:"border-box" }} />)}
+          {/* Positioned events */}
+          {getEvtsForDate(d).filter(ev=>ev.begintijd!=="allday").map(ev=>{
+            const [sh,sm]=(ev.begintijd||"09:00").split(":").map(Number);
+            const [eh,em]=(ev.eindtijd||"10:00").split(":").map(Number);
+            const startMins=(sh-7)*60+sm;
+            const durMins=Math.max((eh-7)*60+em-startMins,30);
+            const PX=44/60;
+            return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:1,right:1,top:startMins*PX,height:Math.max(durMins*PX,18),background:getCatInfo(ev.categorie).color,borderRadius:3,padding:"1px 3px",fontSize:7,fontWeight:700,color:"#fff",overflow:"hidden",cursor:"pointer",zIndex:1 }}>
+              <div style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>
+            </div>;
+          })}
+        </div>
+      ))}
+    </div>
+  </div>
+</div>}
               {calView==="maand"&&<div style={{ flex:1,overflowY:"auto" }}><div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"#fff",borderBottom:"1px solid #E5E5EA" }}>{["ma","di","wo","do","vr","za","zo"].map(d=><div key={d} style={{ textAlign:"center",padding:"6px 0",fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase" }}>{d}</div>)}</div><div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)" }}>{getMonthDays(calDate).map((d,i)=>{ const evs=getEvtsForDate(d); const isCur=d.getMonth()===calDate.getMonth(); return<div key={i} onClick={()=>{setCalDate(d);setCalView("dag");}} style={{ minHeight:58,padding:"4px 2px 2px",borderRight:"1px solid #E5E5EA",borderBottom:"1px solid #E5E5EA",background:isToday(d)?"#EBF4FF":"#fff",cursor:"pointer",opacity:isCur?1:0.35 }}><div style={{ width:20,height:20,borderRadius:10,margin:"0 auto 2px",background:isToday(d)?"#007AFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:isToday(d)?700:500,color:isToday(d)?"#fff":"#000" }}>{d.getDate()}</div>{evs.slice(0,2).map(ev=><div key={ev.id} style={{ background:getCatInfo(ev.categorie).color,color:"#fff",borderRadius:2,padding:"0 3px",fontSize:8,fontWeight:600,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>)}{evs.length>2&&<div style={{ fontSize:8,color:"#8E8E93",textAlign:"center" }}>+{evs.length-2}</div>}</div>; })}</div></div>}
               <div style={{ background:"#fff",padding:"6px 14px",borderTop:"1px solid #E5E5EA",flexShrink:0 }}>
                 <div onClick={()=>events.forEach(e=>exportToICS(e))} style={{ background:"#E8F0FE",color:"#007AFF",borderRadius:10,padding:"9px",textAlign:"center",fontSize:12,fontWeight:700,cursor:"pointer" }}>📤 Exporteer naar Outlook</div>
