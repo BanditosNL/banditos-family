@@ -311,6 +311,10 @@ function AppShell({ currentUser, onLogout }) {
 
   const [mainTab,setMainTab] = useState("chat");
   const [appError,setAppError] = useState(null);
+  const [lastReadAt,setLastReadAt] = useState(()=>{ 
+    try { return parseInt(localStorage.getItem("banditos_lastread_"+currentUser?.id)||"0"); } 
+    catch(e){ return 0; }
+  });
 
   // ── state ──
   const [messages,setMessages]   = useState([]);
@@ -379,9 +383,13 @@ function AppShell({ currentUser, onLogout }) {
 
   // Tab title met ongelezen berichten
   useEffect(()=>{
-    const unread = messages.filter(msg => msg.van !== currentUser.naam).length;
+    const unread = messages.filter(msg => {
+      if(msg.van === currentUser.naam) return false;
+      const msgTime = msg.verzonden_op ? new Date(msg.verzonden_op).getTime() : 0;
+      return msgTime > lastReadAt;
+    }).length;
     document.title = unread > 0 ? `(${unread}) 🤠 Banditos Family` : '🤠 Banditos Family';
-  }, [messages, currentUser.naam]);
+  }, [messages, lastReadAt, currentUser.naam]);
 
   // Push notificaties registreren
   useEffect(()=>{
@@ -515,7 +523,19 @@ function AppShell({ currentUser, onLogout }) {
   // ── Tabs ──
   const taskBadge=tasks.filter(t=>!t.gedaan&&t.toegewezen_aan===currentUser.naam).length;
   const shopBadge=Object.values(allItems).flat().filter(i=>!i.afgevinkt).length;
-  const TABS=[{id:"chat",icon:"💬",label:"Chat"},{id:"taken",icon:"✅",label:"Taken",badge:taskBadge},{id:"kalender",icon:"📅",label:"Kalender"},{id:"lijsten",icon:"🛒",label:"Lijsten",badge:shopBadge},{id:"diner",icon:"🍽️",label:"Diner"}];
+  const openChat = () => {
+    const now = Date.now();
+    setLastReadAt(now);
+    try { localStorage.setItem("banditos_lastread_"+currentUser.id, String(now)); } catch(e){}
+    setMainTab("chat");
+  };
+
+  const chatBadge = messages.filter(msg => {
+    if(msg.van === currentUser.naam) return false;
+    const msgTime = msg.verzonden_op ? new Date(msg.verzonden_op).getTime() : 0;
+    return msgTime > lastReadAt;
+  }).length;
+  const TABS=[{id:"chat",icon:"💬",label:"Chat",badge:chatBadge},{id:"taken",icon:"✅",label:"Taken",badge:taskBadge},{id:"kalender",icon:"📅",label:"Kalender"},{id:"lijsten",icon:"🛒",label:"Lijsten",badge:shopBadge},{id:"diner",icon:"🍽️",label:"Diner"}];
   const accent=()=>{ if(mainTab==="chat")return currentUser.kleur||"#FF6B35"; if(mainTab==="taken")return"#5856D6"; if(mainTab==="kalender")return"#007AFF"; if(mainTab==="lijsten")return listInfo?.color||"#34C759"; return"#E53935"; };
 
   const AV = ({naam,size=30,fsize=14})=>{ const m=getMember(naam); return(<div style={{ width:size,height:size,borderRadius:size/2,background:m.kleur||"#8E8E93",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fsize,overflow:"hidden",flexShrink:0 }}>{m.avatar_url?<img src={m.avatar_url} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:(m.emoji||naam?.[0]||"?")}</div>); };
@@ -754,7 +774,7 @@ function AppShell({ currentUser, onLogout }) {
 
         {/* Tab bar */}
         <div style={{ background:"#fff",borderTop:"1px solid rgba(0,0,0,0.1)",display:"flex",padding:"6px 4px 20px",flexShrink:0 }}>
-          {TABS.map(tab=><div key={tab.id} onClick={()=>setMainTab(tab.id)} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",position:"relative" }}><span style={{ fontSize:22 }}>{tab.icon}</span><span style={{ fontSize:9,fontWeight:700,color:mainTab===tab.id?accent():"#8E8E93" }}>{tab.label}</span>{tab.badge>0&&<div style={{ position:"absolute",top:-1,right:"8%",background:"#FF3B30",color:"#fff",minWidth:16,height:16,borderRadius:8,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",border:"2px solid #fff" }}>{tab.badge}</div>}{mainTab===tab.id&&<div style={{ width:4,height:4,borderRadius:2,background:accent(),marginTop:1 }} />}</div>)}
+          {TABS.map(tab=><div key={tab.id} onClick={()=>tab.id==="chat" ? openChat() : setMainTab(tab.id)} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",position:"relative" }}><span style={{ fontSize:22 }}>{tab.icon}</span><span style={{ fontSize:9,fontWeight:700,color:mainTab===tab.id?accent():"#8E8E93" }}>{tab.label}</span>{tab.badge>0&&<div style={{ position:"absolute",top:-1,right:"8%",background:"#FF3B30",color:"#fff",minWidth:16,height:16,borderRadius:8,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",border:"2px solid #fff" }}>{tab.badge}</div>}{mainTab===tab.id&&<div style={{ width:4,height:4,borderRadius:2,background:accent(),marginTop:1 }} />}</div>)}
         </div>
 
         {/* FAB */}
