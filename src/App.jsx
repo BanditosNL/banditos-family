@@ -346,6 +346,10 @@ function AppShell({ currentUser, onLogout }) {
   const [newTask,setNewTask]       = useState({ titel:"", categorie:"thuis", toegewezen_aan:currentUser.naam, prioriteit:"normaal", deadline:"", notities:"" });
   const [taskFilter,setTaskFilter] = useState("alle");
   const [taskView,setTaskView]     = useState("taken");
+  const [editTask,setEditTask]     = useState(null);
+  const [editEvent,setEditEvent]   = useState(null);
+  const [editShopItem,setEditShopItem] = useState(null);
+  const [editMeal,setEditMeal]     = useState(null);
 
   const [meals,setMeals]           = useState([]);
   const [showAddMeal,setShowAddMeal] = useState(false);
@@ -480,6 +484,7 @@ function AppShell({ currentUser, onLogout }) {
     if(supabase) await supabase.from("taken").update(upd).eq("id",id);
   };
   const deleteTask = async id=>{ setTasks(p=>p.filter(x=>x.id!==id)); if(supabase) await supabase.from("taken").delete().eq("id",id); };
+  const updateTask = async(id,upd)=>{ setTasks(p=>p.map(x=>x.id===id?{...x,...upd}:x)); if(supabase) await supabase.from("taken").update(upd).eq("id",id); setEditTask(null); };
 
   const curMonthKey=getMonthKey(Date.now());
   const calcPts=naam=>tasks.filter(t=>t.gedaan&&t.gedaan_door===naam&&t.toegevoegd_door!==naam&&getMonthKey(new Date(t.gedaan_op||t.aangemaakt_op).getTime())===curMonthKey).reduce((s,t)=>s+(POINTS_MAP[t.prioriteit]||10),0);
@@ -497,6 +502,7 @@ function AppShell({ currentUser, onLogout }) {
     setShowAddEvent(false);
   };
   const deleteEvent = async id=>{ setEvents(p=>p.filter(e=>e.id!==id)); if(supabase) await supabase.from("afspraken").delete().eq("id",id); setSelectedEvent(null); };
+  const updateEvent = async(id,upd)=>{ setEvents(p=>p.map(x=>x.id===id?{...x,...upd}:x)); if(supabase) await supabase.from("afspraken").update(upd).eq("id",id); setEditEvent(null); setSelectedEvent(null); };
 
   // ── Shopping ──
   const cats=SHOP_CATS[activeList]||[];
@@ -516,6 +522,7 @@ function AppShell({ currentUser, onLogout }) {
     if(supabase) await supabase.from("items").update({afgevinkt}).eq("id",id);
   };
   const deleteShopItem=async id=>{ setAllItems(p=>({...p,[activeList]:p[activeList].filter(i=>i.id!==id)})); if(supabase) await supabase.from("items").delete().eq("id",id); setSwipedId(null); };
+  const updateShopItem=async(id,upd)=>{ setAllItems(p=>({...p,[activeList]:p[activeList].map(i=>i.id===id?{...i,...upd}:i)})); if(supabase) await supabase.from("items").update(upd).eq("id",id); setEditShopItem(null); };
   const clearChecked=async()=>{ const ids=checked.map(i=>i.id); setAllItems(p=>({...p,[activeList]:p[activeList].filter(i=>!ids.includes(i.id))})); if(supabase) await supabase.from("items").delete().in("id",ids); };
   const addShopItem=async()=>{
     if(!newItem.naam.trim()) return;
@@ -544,6 +551,7 @@ function AppShell({ currentUser, onLogout }) {
     if(selectedMeal?.id===id) setSelectedMeal(p=>({...p,stemmen:v}));
     if(supabase) await supabase.from("diners").update({stemmen:v}).eq("id",id);
   };
+  const updateMeal=async(id,upd)=>{ setMeals(p=>p.map(x=>x.id===id?{...x,...upd}:x)); if(supabase) await supabase.from("diners").update(upd).eq("id",id); setEditMeal(null); setSelectedMeal(null); };
   const handleMealImg=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>setNewMeal(p=>({...p,image:ev.target.result})); r.readAsDataURL(f); };
   const filteredMeals=mealFilter==="alle"?meals:meals.filter(m=>m.categorie===mealFilter);
 
@@ -729,8 +737,8 @@ function AppShell({ currentUser, onLogout }) {
                   <div style={{ flex:1,overflowY:"auto",padding:"4px 14px" }}>
                     {filteredTasks.length===0?<div style={{ textAlign:"center",padding:"48px 0",color:"#8E8E93" }}><div style={{ fontSize:44,marginBottom:10 }}>✅</div><div style={{ fontWeight:600,fontSize:17 }}>Geen taken</div><div style={{ fontSize:14,marginTop:4 }}>Tik op + om een taak toe te voegen</div></div>:(
                       <>
-                        {filteredTasks.filter(t=>!t.gedaan).length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5,marginBottom:6,paddingLeft:4 }}>OPEN ({filteredTasks.filter(t=>!t.gedaan).length})</div><div style={{ background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)" }}>{filteredTasks.filter(t=>!t.gedaan).map((t,i,arr)=><TaskItem key={t.id} task={t} isLast={i===arr.length-1} onToggle={()=>toggleTask(t.id)} onDelete={()=>deleteTask(t.id)} getMember={getMember} />)}</div></div>}
-                        {filteredTasks.filter(t=>t.gedaan).length>0&&<div style={{ marginBottom:12 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5,marginBottom:6,paddingLeft:4 }}>GEDAAN ({filteredTasks.filter(t=>t.gedaan).length})</div><div style={{ background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",opacity:0.7 }}>{filteredTasks.filter(t=>t.gedaan).map((t,i,arr)=><TaskItem key={t.id} task={t} isLast={i===arr.length-1} onToggle={()=>toggleTask(t.id)} onDelete={()=>deleteTask(t.id)} getMember={getMember} />)}</div></div>}
+                        {filteredTasks.filter(t=>!t.gedaan).length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5,marginBottom:6,paddingLeft:4 }}>OPEN ({filteredTasks.filter(t=>!t.gedaan).length})</div><div style={{ background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)" }}>{filteredTasks.filter(t=>!t.gedaan).map((t,i,arr)=><TaskItem key={t.id} task={t} isLast={i===arr.length-1} onToggle={()=>toggleTask(t.id)} onDelete={()=>deleteTask(t.id)} onEdit={()=>setEditTask({...t})} getMember={getMember} />)}</div></div>}
+                        {filteredTasks.filter(t=>t.gedaan).length>0&&<div style={{ marginBottom:12 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5,marginBottom:6,paddingLeft:4 }}>GEDAAN ({filteredTasks.filter(t=>t.gedaan).length})</div><div style={{ background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",opacity:0.7 }}>{filteredTasks.filter(t=>t.gedaan).map((t,i,arr)=><TaskItem key={t.id} task={t} isLast={i===arr.length-1} onToggle={()=>toggleTask(t.id)} onDelete={()=>deleteTask(t.id)} onEdit={()=>setEditTask({...t})} getMember={getMember} />)}</div></div>}
                       </>
                     )}
                   </div>
@@ -777,8 +785,8 @@ function AppShell({ currentUser, onLogout }) {
                 {cats.map(cat=><Chip key={cat.id} label={cat.label.split(" ")[0]} active={filterCat===cat.id} color={cat.color} onClick={()=>setFilterCat(cat.id)} />)}
               </div>
               <div style={{ flex:1,overflowY:"auto",padding:"6px 12px" }}>
-                {unchecked.length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5,marginBottom:5,paddingLeft:4 }}>TE HALEN ({unchecked.length})</div><div style={{ background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)" }}>{unchecked.map((item,i)=><ShopItem key={item.id} item={item} isLast={i===unchecked.length-1} catColor={getCat(item.categorie).color} memberColor={getMember(item.toegevoegd_door).kleur||"#8E8E93"} onToggle={()=>toggleCheck(item.id)} onDelete={()=>deleteShopItem(item.id)} swiped={swipedId===item.id} onSwipe={()=>setSwipedId(swipedId===item.id?null:item.id)} />)}</div></div>}
-                {checked.length>0&&<div style={{ marginBottom:10 }}><div style={{ display:"flex",justifyContent:"space-between",marginBottom:5,paddingLeft:4 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5 }}>IN WINKELWAGEN ({checked.length})</div><div onClick={clearChecked} style={{ fontSize:12,color:"#FF3B30",fontWeight:700,cursor:"pointer" }}>Wis</div></div><div style={{ background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",opacity:0.65 }}>{checked.map((item,i)=><ShopItem key={item.id} item={item} isLast={i===checked.length-1} catColor={getCat(item.categorie).color} memberColor={getMember(item.toegevoegd_door).kleur||"#8E8E93"} onToggle={()=>toggleCheck(item.id)} onDelete={()=>deleteShopItem(item.id)} swiped={swipedId===item.id} onSwipe={()=>setSwipedId(swipedId===item.id?null:item.id)} />)}</div></div>}
+                {unchecked.length>0&&<div style={{ marginBottom:8 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5,marginBottom:5,paddingLeft:4 }}>TE HALEN ({unchecked.length})</div><div style={{ background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)" }}>{unchecked.map((item,i)=><ShopItem key={item.id} item={item} isLast={i===unchecked.length-1} catColor={getCat(item.categorie).color} memberColor={getMember(item.toegevoegd_door).kleur||"#8E8E93"} onToggle={()=>toggleCheck(item.id)} onDelete={()=>deleteShopItem(item.id)} onEdit={()=>setEditShopItem({...item})} swiped={swipedId===item.id} onSwipe={()=>setSwipedId(swipedId===item.id?null:item.id)} />)}</div></div>}
+                {checked.length>0&&<div style={{ marginBottom:10 }}><div style={{ display:"flex",justifyContent:"space-between",marginBottom:5,paddingLeft:4 }}><div style={{ fontSize:11,fontWeight:700,color:"#8E8E93",letterSpacing:0.5 }}>IN WINKELWAGEN ({checked.length})</div><div onClick={clearChecked} style={{ fontSize:12,color:"#FF3B30",fontWeight:700,cursor:"pointer" }}>Wis</div></div><div style={{ background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",opacity:0.65 }}>{checked.map((item,i)=><ShopItem key={item.id} item={item} isLast={i===checked.length-1} catColor={getCat(item.categorie).color} memberColor={getMember(item.toegevoegd_door).kleur||"#8E8E93"} onToggle={()=>toggleCheck(item.id)} onDelete={()=>deleteShopItem(item.id)} onEdit={()=>setEditShopItem({...item})} swiped={swipedId===item.id} onSwipe={()=>setSwipedId(swipedId===item.id?null:item.id)} />)}</div></div>}
                 {filteredShop.length===0&&<div style={{ textAlign:"center",padding:"40px 0",color:"#8E8E93" }}><div style={{ fontSize:40,marginBottom:8 }}>{listInfo.icon}</div><div style={{ fontWeight:600 }}>Lijst is leeg</div><div style={{ fontSize:13,marginTop:4 }}>Tik op + om iets toe te voegen</div></div>}
               </div>
               <div style={{ background:"#fff",borderTop:"1px solid rgba(0,0,0,0.08)",display:"flex",padding:"6px 0 18px",flexShrink:0 }}>
@@ -828,9 +836,56 @@ function AppShell({ currentUser, onLogout }) {
 
         {showAddMeal&&<Sheet onClose={()=>setShowAddMeal(false)}><SheetTitle icon="🍽️" title="Gerecht voorstellen" sub={currentUser.naam} subColor="#E53935" /><FieldBox><input value={newMeal.titel} onChange={e=>setNewMeal({...newMeal,titel:e.target.value})} placeholder="Naam van het gerecht..." style={INP} /></FieldBox><FieldBox><input value={newMeal.recept} onChange={e=>setNewMeal({...newMeal,recept:e.target.value})} placeholder="Ingrediënten / recept (optioneel)" style={INP} /></FieldBox><div onClick={()=>mealFileRef.current?.click()} style={{ background:newMeal.image?"transparent":"#fff",border:"2px dashed #E5E5EA",borderRadius:12,marginBottom:10,overflow:"hidden",cursor:"pointer",minHeight:80,display:"flex",alignItems:"center",justifyContent:"center" }}>{newMeal.image?<img src={newMeal.image} alt="" style={{ width:"100%",height:120,objectFit:"cover" }}/>:<div style={{ textAlign:"center",color:"#8E8E93",padding:16 }}><div style={{ fontSize:28,marginBottom:4 }}>📸</div><div style={{ fontSize:13,fontWeight:600 }}>Foto toevoegen</div></div>}</div><input ref={mealFileRef} type="file" accept="image/*" onChange={handleMealImg} style={{ display:"none" }} /><div style={{ display:"flex",flexWrap:"wrap",gap:5,marginBottom:14 }}>{MEAL_CATS.map(cat=><Chip key={cat.id} label={cat.label} active={newMeal.categorie===cat.id} color={cat.color} onClick={()=>setNewMeal({...newMeal,categorie:cat.id})} />)}</div><ActionBtn color="#E53935" onClick={addMeal}>Gerecht voorstellen</ActionBtn></Sheet>}
 
-        {selectedEvent&&<Sheet onClose={()=>setSelectedEvent(null)}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14 }}><div style={{ flex:1 }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:4 }}><div style={{ width:8,height:8,borderRadius:4,background:getCatInfo(selectedEvent.categorie).color }} /><div style={{ fontSize:10,color:getCatInfo(selectedEvent.categorie).color,fontWeight:700,textTransform:"uppercase" }}>{getCatInfo(selectedEvent.categorie).label}</div></div><div style={{ fontSize:18,fontWeight:800,color:"#000" }}>{selectedEvent.titel}</div><div style={{ fontSize:12,color:"#8E8E93",marginTop:2 }}>{NL_DAYS_LONG[parseDate(selectedEvent.datum).getDay()]} {parseDate(selectedEvent.datum).getDate()} {NL_MONTHS[parseDate(selectedEvent.datum).getMonth()]}</div></div><AV naam={selectedEvent.lid} size={36} fsize={18} /></div><div style={{ background:"#F2F2F7",borderRadius:12,padding:"10px 14px",marginBottom:12 }}><InfoRow icon="🕐" label={`${selectedEvent.begintijd} – ${selectedEvent.eindtijd}`} />{selectedEvent.locatie&&<InfoRow icon="📍" label={selectedEvent.locatie} />}<InfoRow icon="👤" label={selectedEvent.lid} />{selectedEvent.notities&&<InfoRow icon="📝" label={selectedEvent.notities} />}</div><div style={{ display:"flex",gap:8 }}><div onClick={()=>exportToICS(selectedEvent)} style={{ flex:1,background:"#E8F0FE",color:"#007AFF",borderRadius:12,padding:"12px",textAlign:"center",fontSize:13,fontWeight:700,cursor:"pointer" }}>📤 Naar Outlook</div><div onClick={()=>deleteEvent(selectedEvent.id)} style={{ flex:1,background:"#FFE5E5",color:"#FF3B30",borderRadius:12,padding:"12px",textAlign:"center",fontSize:13,fontWeight:700,cursor:"pointer" }}>🗑️ Verwijder</div></div></Sheet>}
+        {selectedEvent&&<Sheet onClose={()=>setSelectedEvent(null)}><div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14 }}><div style={{ flex:1 }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:4 }}><div style={{ width:8,height:8,borderRadius:4,background:getCatInfo(selectedEvent.categorie).color }} /><div style={{ fontSize:10,color:getCatInfo(selectedEvent.categorie).color,fontWeight:700,textTransform:"uppercase" }}>{getCatInfo(selectedEvent.categorie).label}</div></div><div style={{ fontSize:18,fontWeight:800,color:"#000" }}>{selectedEvent.titel}</div><div style={{ fontSize:12,color:"#8E8E93",marginTop:2 }}>{NL_DAYS_LONG[parseDate(selectedEvent.datum).getDay()]} {parseDate(selectedEvent.datum).getDate()} {NL_MONTHS[parseDate(selectedEvent.datum).getMonth()]}</div></div><AV naam={selectedEvent.lid} size={36} fsize={18} /></div><div style={{ background:"#F2F2F7",borderRadius:12,padding:"10px 14px",marginBottom:12 }}><InfoRow icon="🕐" label={`${selectedEvent.begintijd} – ${selectedEvent.eindtijd}`} />{selectedEvent.locatie&&<InfoRow icon="📍" label={selectedEvent.locatie} />}<InfoRow icon="👤" label={selectedEvent.lid} />{selectedEvent.notities&&<InfoRow icon="📝" label={selectedEvent.notities} />}</div><div style={{ display:"flex",gap:8,marginBottom:8 }}><div onClick={()=>exportToICS(selectedEvent)} style={{ flex:1,background:"#E8F0FE",color:"#007AFF",borderRadius:12,padding:"12px",textAlign:"center",fontSize:13,fontWeight:700,cursor:"pointer" }}>📤 Outlook</div><div onClick={()=>{ setEditEvent({...selectedEvent}); setSelectedEvent(null); }} style={{ flex:1,background:"#F0FFF0",color:"#34C759",borderRadius:12,padding:"12px",textAlign:"center",fontSize:13,fontWeight:700,cursor:"pointer" }}>✏️ Bewerken</div><div onClick={()=>deleteEvent(selectedEvent.id)} style={{ flex:1,background:"#FFE5E5",color:"#FF3B30",borderRadius:12,padding:"12px",textAlign:"center",fontSize:13,fontWeight:700,cursor:"pointer" }}>🗑️ Wis</div></div></Sheet>}
 
-        {selectedMeal&&<Sheet onClose={()=>setSelectedMeal(null)}>{selectedMeal.foto_url&&<img src={selectedMeal.foto_url} alt="" style={{ width:"100%",height:160,objectFit:"cover",borderRadius:12,marginBottom:12 }} />}<div style={{ fontSize:20,fontWeight:800,color:"#000",marginBottom:4 }}>{selectedMeal.titel}</div><div style={{ fontSize:12,color:"#8E8E93",marginBottom:12 }}>Voorgesteld door <span style={{ color:getMember(selectedMeal.toegevoegd_door).kleur||"#8E8E93",fontWeight:700 }}>{selectedMeal.toegevoegd_door}</span></div>{selectedMeal.recept&&<div style={{ background:"#F2F2F7",borderRadius:12,padding:"12px",marginBottom:12 }}><div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6 }}>RECEPT</div><div style={{ fontSize:14,color:"#3A3A3C",lineHeight:1.6 }}>{selectedMeal.recept}</div></div>}<div style={{ display:"flex",gap:8,marginBottom:14 }}>{[["❤️","Lekker!"],["👍","Prima"],["😐","Twijfel"]].map(([emoji,label])=>{ const count=Object.values(selectedMeal.stemmen||{}).filter(v=>v===emoji).length; const myVote=(selectedMeal.stemmen||{})[currentUser.naam]; return<div key={emoji} onClick={()=>voteMeal(selectedMeal.id,emoji)} style={{ flex:1,padding:"10px 0",borderRadius:14,textAlign:"center",border:`2px solid ${myVote===emoji?"#007AFF":"#E5E5EA"}`,cursor:"pointer",background:myVote===emoji?"#EBF4FF":"#fff" }}><div style={{ fontSize:22 }}>{emoji}</div><div style={{ fontSize:12,fontWeight:700 }}>{label}</div><div style={{ fontSize:11,color:"#8E8E93" }}>{count} stem{count!==1?"men":""}</div></div>; })}</div><div onClick={()=>setSelectedMeal(null)} style={{ background:"#F2F2F7",color:"#3A3A3C",borderRadius:12,padding:"12px",textAlign:"center",fontSize:14,fontWeight:700,cursor:"pointer" }}>Sluiten</div></Sheet>}
+        {selectedMeal&&<Sheet onClose={()=>setSelectedMeal(null)}>{selectedMeal.foto_url&&<img src={selectedMeal.foto_url} alt="" style={{ width:"100%",height:160,objectFit:"cover",borderRadius:12,marginBottom:12 }} />}<div style={{ fontSize:20,fontWeight:800,color:"#000",marginBottom:4 }}>{selectedMeal.titel}</div><div style={{ fontSize:12,color:"#8E8E93",marginBottom:12 }}>Voorgesteld door <span style={{ color:getMember(selectedMeal.toegevoegd_door).kleur||"#8E8E93",fontWeight:700 }}>{selectedMeal.toegevoegd_door}</span></div>{selectedMeal.recept&&<div style={{ background:"#F2F2F7",borderRadius:12,padding:"12px",marginBottom:12 }}><div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6 }}>RECEPT</div><div style={{ fontSize:14,color:"#3A3A3C",lineHeight:1.6 }}>{selectedMeal.recept}</div></div>}<div style={{ display:"flex",gap:8,marginBottom:14 }}>{[["❤️","Lekker!"],["👍","Prima"],["😐","Twijfel"]].map(([emoji,label])=>{ const count=Object.values(selectedMeal.stemmen||{}).filter(v=>v===emoji).length; const myVote=(selectedMeal.stemmen||{})[currentUser.naam]; return<div key={emoji} onClick={()=>voteMeal(selectedMeal.id,emoji)} style={{ flex:1,padding:"10px 0",borderRadius:14,textAlign:"center",border:`2px solid ${myVote===emoji?"#007AFF":"#E5E5EA"}`,cursor:"pointer",background:myVote===emoji?"#EBF4FF":"#fff" }}><div style={{ fontSize:22 }}>{emoji}</div><div style={{ fontSize:12,fontWeight:700 }}>{label}</div><div style={{ fontSize:11,color:"#8E8E93" }}>{count} stem{count!==1?"men":""}</div></div>; })}</div><div style={{ display:"flex",gap:8 }}><div onClick={()=>{ setEditMeal({...selectedMeal}); setSelectedMeal(null); }} style={{ flex:1,background:"#EBF4FF",color:"#007AFF",borderRadius:12,padding:"12px",textAlign:"center",fontSize:13,fontWeight:700,cursor:"pointer" }}>✏️ Bewerken</div><div onClick={()=>setSelectedMeal(null)} style={{ flex:1,background:"#F2F2F7",color:"#3A3A3C",borderRadius:12,padding:"12px",textAlign:"center",fontSize:14,fontWeight:700,cursor:"pointer" }}>Sluiten</div></div></Sheet>}
+
+        {/* Edit Task Sheet */}
+        {editTask&&<Sheet onClose={()=>setEditTask(null)}>
+          <SheetTitle icon="✅" title="Taak bewerken" sub={currentUser.naam} subColor="#5856D6" />
+          <FieldBox><input value={editTask.titel} onChange={e=>setEditTask({...editTask,titel:e.target.value})} placeholder="Wat moet er gedaan worden?" style={INP} /></FieldBox>
+          <div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6,marginTop:4 }}>TOEWIJZEN AAN</div>
+          <div style={{ display:"flex",gap:6,marginBottom:10,flexWrap:"wrap" }}>{familyMembers.map(m=><div key={m.naam} onClick={()=>setEditTask({...editTask,toegewezen_aan:m.naam})} style={{ flex:"1 0 40%",padding:"8px 0",borderRadius:12,textAlign:"center",fontSize:11,fontWeight:700,background:editTask.toegewezen_aan===m.naam?(m.kleur||"#8E8E93"):"#E5E5EA",color:editTask.toegewezen_aan===m.naam?"#fff":"#3A3A3C",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4 }}><AV naam={m.naam} size={32} fsize={16} />{m.naam}</div>)}</div>
+          <div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6 }}>PRIORITEIT</div>
+          <div style={{ display:"flex",gap:6,marginBottom:10 }}>{[["laag","🟢"],["normaal","🟡"],["hoog","🔴"]].map(([p2,ic])=><div key={p2} onClick={()=>setEditTask({...editTask,prioriteit:p2})} style={{ flex:1,padding:"8px 0",borderRadius:12,textAlign:"center",fontSize:12,fontWeight:700,background:editTask.prioriteit===p2?"#5856D6":"#E5E5EA",color:editTask.prioriteit===p2?"#fff":"#3A3A3C",cursor:"pointer" }}>{ic} {p2.charAt(0).toUpperCase()+p2.slice(1)}</div>)}</div>
+          <FieldBox><input value={editTask.deadline||""} type="date" onChange={e=>setEditTask({...editTask,deadline:e.target.value||null})} style={{...INP,fontSize:13}} /></FieldBox>
+          <ActionBtn color="#5856D6" onClick={()=>updateTask(editTask.id,{titel:editTask.titel,toegewezen_aan:editTask.toegewezen_aan,prioriteit:editTask.prioriteit,deadline:editTask.deadline||null})}>Opslaan</ActionBtn>
+        </Sheet>}
+
+        {/* Edit Event Sheet */}
+        {editEvent&&<Sheet onClose={()=>setEditEvent(null)}>
+          <SheetTitle icon="📅" title="Afspraak bewerken" sub={currentUser.naam} subColor="#007AFF" />
+          <FieldBox><input value={editEvent.titel} onChange={e=>setEditEvent({...editEvent,titel:e.target.value})} placeholder="Titel..." style={INP} /></FieldBox>
+          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+            <FieldBox style={{ flex:1 }}><input type="date" value={editEvent.datum} onChange={e=>setEditEvent({...editEvent,datum:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox>
+          </div>
+          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+            <FieldBox style={{ flex:1 }}><input value={editEvent.begintijd} onChange={e=>setEditEvent({...editEvent,begintijd:e.target.value})} placeholder="09:00" style={INP} /></FieldBox>
+            <FieldBox style={{ flex:1 }}><input value={editEvent.eindtijd} onChange={e=>setEditEvent({...editEvent,eindtijd:e.target.value})} placeholder="10:00" style={INP} /></FieldBox>
+          </div>
+          <FieldBox><input value={editEvent.locatie||""} onChange={e=>setEditEvent({...editEvent,locatie:e.target.value})} placeholder="Locatie (optioneel)" style={INP} /></FieldBox>
+          <FieldBox><input value={editEvent.notities||""} onChange={e=>setEditEvent({...editEvent,notities:e.target.value})} placeholder="Notities (optioneel)" style={INP} /></FieldBox>
+          <ActionBtn color="#007AFF" onClick={()=>updateEvent(editEvent.id,{titel:editEvent.titel,datum:editEvent.datum,begintijd:editEvent.begintijd,eindtijd:editEvent.eindtijd,locatie:editEvent.locatie,notities:editEvent.notities})}>Opslaan</ActionBtn>
+        </Sheet>}
+
+        {/* Edit Shop Item Sheet */}
+        {editShopItem&&<Sheet onClose={()=>setEditShopItem(null)}>
+          <SheetTitle icon="🛒" title="Item bewerken" sub={currentUser.naam} subColor="#34C759" />
+          <FieldBox><input value={editShopItem.naam} onChange={e=>setEditShopItem({...editShopItem,naam:e.target.value})} placeholder="Naam..." style={INP} /></FieldBox>
+          <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+            <FieldBox style={{ flex:1 }}><input type="number" value={editShopItem.hoeveelheid} onChange={e=>setEditShopItem({...editShopItem,hoeveelheid:e.target.value})} style={INP} /></FieldBox>
+            <FieldBox style={{ flex:1 }}><input value={editShopItem.eenheid} onChange={e=>setEditShopItem({...editShopItem,eenheid:e.target.value})} placeholder="eenheid" style={INP} /></FieldBox>
+          </div>
+          <ActionBtn color="#34C759" onClick={()=>updateShopItem(editShopItem.id,{naam:editShopItem.naam,hoeveelheid:editShopItem.hoeveelheid,eenheid:editShopItem.eenheid})}>Opslaan</ActionBtn>
+        </Sheet>}
+
+        {/* Edit Meal Sheet */}
+        {editMeal&&<Sheet onClose={()=>setEditMeal(null)}>
+          <SheetTitle icon="🍽️" title="Diner bewerken" sub={currentUser.naam} subColor="#E53935" />
+          <FieldBox><input value={editMeal.titel} onChange={e=>setEditMeal({...editMeal,titel:e.target.value})} placeholder="Gerecht..." style={INP} /></FieldBox>
+          <FieldBox><textarea value={editMeal.recept||""} onChange={e=>setEditMeal({...editMeal,recept:e.target.value})} placeholder="Recept (optioneel)" style={{...INP,minHeight:80,resize:"none"}} /></FieldBox>
+          <ActionBtn color="#E53935" onClick={()=>updateMeal(editMeal.id,{titel:editMeal.titel,recept:editMeal.recept})}>Opslaan</ActionBtn>
+        </Sheet>}
 
         <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}*{-webkit-tap-highlight-color:transparent}::-webkit-scrollbar{display:none}input::placeholder{color:#aaa}`}</style>
       </div>
@@ -858,7 +913,7 @@ function AppShell({ currentUser, onLogout }) {
 }
 
 // ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
-function TaskItem({ task, isLast, onToggle, onDelete, getMember }) {
+function TaskItem({ task, isLast, onToggle, onDelete, onEdit, getMember }) {
   const [swiped,setSwiped] = useState(false);
   const m = getMember(task.toegewezen_aan);
   const TC = TASK_CATS.find(c=>c.id===task.categorie)||TASK_CATS[4];
@@ -867,8 +922,11 @@ function TaskItem({ task, isLast, onToggle, onDelete, getMember }) {
   const earns = task.toegevoegd_door!==task.toegewezen_aan;
   return (
     <div style={{ position:"relative",overflow:"hidden" }}>
-      <div style={{ position:"absolute",right:0,top:0,bottom:0,width:72,background:"#FF3B30",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }} onClick={onDelete}>Wis</div>
-      <div style={{ display:"flex",alignItems:"center",padding:"12px 14px",borderBottom:isLast?"none":"1px solid #F2F2F7",background:"#fff",transform:swiped?"translateX(-72px)":"translateX(0)",transition:"transform 0.22s" }}>
+      <div style={{ position:"absolute",right:0,top:0,bottom:0,width:130,display:"flex" }}>
+        <div style={{ flex:1,background:"#007AFF",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }} onClick={onEdit}>✏️ Bewerk</div>
+        <div style={{ flex:1,background:"#FF3B30",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }} onClick={onDelete}>🗑️ Wis</div>
+      </div>
+      <div style={{ display:"flex",alignItems:"center",padding:"12px 14px",borderBottom:isLast?"none":"1px solid #F2F2F7",background:"#fff",transform:swiped?"translateX(-130px)":"translateX(0)",transition:"transform 0.22s" }}>
         <div onClick={onToggle} style={{ width:24,height:24,borderRadius:12,marginRight:12,flexShrink:0,border:task.gedaan?"none":"2px solid #C7C7CC",background:task.gedaan?"#34C759":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all 0.2s" }}>
           {task.gedaan&&<span style={{ color:"#fff",fontSize:12 }}>✓</span>}
         </div>
@@ -894,8 +952,22 @@ function CalPill({ event, onClick, getCatInfo, getMember }) {
   const cat=getCatInfo(event.categorie); const m=getMember(event.lid);
   return <div onClick={onClick} style={{ background:cat.color+"15",borderLeft:`3px solid ${cat.color}`,borderRadius:"0 8px 8px 0",padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,marginBottom:2 }}><div style={{ flex:1 }}><div style={{ fontSize:12,fontWeight:700,color:"#000" }}>{event.titel}</div><div style={{ fontSize:10,color:"#8E8E93" }}>{event.begintijd}–{event.eindtijd}{event.locatie?` · ${event.locatie}`:""}</div></div><div style={{ width:20,height:20,borderRadius:10,background:m.kleur||"#8E8E93",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:"#fff",overflow:"hidden" }}>{m.avatar_url?<img src={m.avatar_url} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:(m.emoji||event.lid?.[0])}</div></div>;
 }
-function ShopItem({ item, isLast, catColor, memberColor, onToggle, onDelete, swiped, onSwipe }) {
-  return <div style={{ position:"relative",overflow:"hidden" }}><div style={{ position:"absolute",right:0,top:0,bottom:0,width:68,background:"#FF3B30",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }} onClick={onDelete}>Wis</div><div style={{ display:"flex",alignItems:"center",padding:"10px 12px",borderBottom:isLast?"none":"1px solid #F2F2F7",background:"#fff",transform:swiped?"translateX(-68px)":"translateX(0)",transition:"transform 0.22s" }}><div style={{ width:6,height:6,borderRadius:3,background:catColor,marginRight:10,flexShrink:0 }} /><div onClick={onToggle} style={{ width:21,height:21,borderRadius:11,marginRight:10,flexShrink:0,border:item.afgevinkt?"none":"2px solid #C7C7CC",background:item.afgevinkt?"#34C759":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all 0.2s" }}>{item.afgevinkt&&<span style={{ color:"#fff",fontSize:11 }}>✓</span>}</div><div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:14,fontWeight:500,color:item.afgevinkt?"#8E8E93":"#000",textDecoration:item.afgevinkt?"line-through":"none" }}>{item.naam}</div><div style={{ fontSize:11,color:"#8E8E93",marginTop:1 }}>{item.hoeveelheid} {item.eenheid} · <span style={{ color:memberColor,fontWeight:600 }}>{item.toegevoegd_door}</span></div></div><div onClick={onSwipe} style={{ padding:"0 0 0 8px",color:"#C7C7CC",fontSize:15 }}>⋯</div></div></div>;
+function ShopItem({ item, isLast, catColor, memberColor, onToggle, onDelete, onEdit, swiped, onSwipe }) {
+  return <div style={{ position:"relative",overflow:"hidden" }}>
+    <div style={{ position:"absolute",right:0,top:0,bottom:0,width:130,display:"flex" }}>
+      <div style={{ flex:1,background:"#007AFF",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }} onClick={onEdit}>✏️ Bewerk</div>
+      <div style={{ flex:1,background:"#FF3B30",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer" }} onClick={onDelete}>🗑️ Wis</div>
+    </div>
+    <div style={{ display:"flex",alignItems:"center",padding:"10px 12px",borderBottom:isLast?"none":"1px solid #F2F2F7",background:"#fff",transform:swiped?"translateX(-130px)":"translateX(0)",transition:"transform 0.22s" }}>
+      <div style={{ width:6,height:6,borderRadius:3,background:catColor,marginRight:10,flexShrink:0 }} />
+      <div onClick={onToggle} style={{ width:21,height:21,borderRadius:11,marginRight:10,flexShrink:0,border:item.afgevinkt?"none":"2px solid #C7C7CC",background:item.afgevinkt?"#34C759":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all 0.2s" }}>{item.afgevinkt&&<span style={{ color:"#fff",fontSize:11 }}>✓</span>}</div>
+      <div style={{ flex:1,minWidth:0 }}>
+        <div style={{ fontSize:14,fontWeight:500,color:item.afgevinkt?"#8E8E93":"#000",textDecoration:item.afgevinkt?"line-through":"none" }}>{item.naam}</div>
+        <div style={{ fontSize:11,color:"#8E8E93",marginTop:1 }}>{item.hoeveelheid} {item.eenheid} · <span style={{ color:memberColor,fontWeight:600 }}>{item.toegevoegd_door}</span></div>
+      </div>
+      <div onClick={onSwipe} style={{ padding:"0 0 0 8px",color:"#C7C7CC",fontSize:15 }}>⋯</div>
+    </div>
+  </div>;
 }
 function Sheet({ children, onClose }) {
   return <div style={{ position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",zIndex:20,display:"flex",alignItems:"flex-end" }} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{ background:"#F2F2F7",borderRadius:"22px 22px 0 0",padding:"14px 16px 36px",width:"100%",boxSizing:"border-box",animation:"slideUp 0.28s ease",maxHeight:"88%",overflowY:"auto" }}><div style={{ width:34,height:4,background:"#C7C7CC",borderRadius:2,margin:"0 auto 14px" }} />{children}</div></div>;
