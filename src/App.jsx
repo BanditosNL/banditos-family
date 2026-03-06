@@ -479,15 +479,28 @@ function AppShell({ currentUser, onLogout }) {
   const toggleTask = async id=>{
     const t=tasks.find(x=>x.id===id); if(!t) return;
     const nowDone=!t.gedaan;
-    const upd={ gedaan:nowDone, gedaan_door:nowDone?currentUser.naam:null, gedaan_op:nowDone?new Date().toISOString():null };
+    const gedaan_op=nowDone?new Date().toISOString():null;
+    const upd={ gedaan:nowDone, gedaan_door:nowDone?currentUser.naam:null, gedaan_op };
     setTasks(p=>p.map(x=>x.id===id?{...x,...upd}:x));
-    if(supabase) await supabase.from("taken").update(upd).eq("id",id);
+    if(supabase){
+      await supabase.from("taken").update(upd).eq("id",id);
+      // Reload to get fresh data including gedaan_op from server
+      loadTasks();
+    }
   };
   const deleteTask = async id=>{ setTasks(p=>p.filter(x=>x.id!==id)); if(supabase) await supabase.from("taken").delete().eq("id",id); };
   const updateTask = async(id,upd)=>{ setTasks(p=>p.map(x=>x.id===id?{...x,...upd}:x)); if(supabase) await supabase.from("taken").update(upd).eq("id",id); setEditTask(null); };
 
   const curMonthKey=getMonthKey(Date.now());
-  const calcPts=naam=>tasks.filter(t=>t.gedaan&&t.gedaan_door===naam&&t.toegevoegd_door!==naam&&getMonthKey(new Date(t.gedaan_op||t.aangemaakt_op).getTime())===curMonthKey).reduce((s,t)=>s+(POINTS_MAP[t.prioriteit]||10),0);
+  const calcPts=naam=>tasks.filter(t=>{
+    if(!t.gedaan||t.gedaan_door!==naam) return false;
+    if(t.toegevoegd_door===naam) return false; // geen punten voor eigen taken
+    // Moet gedaan zijn in de huidige maand
+    const ts = t.gedaan_op;
+    if(!ts) return false; // geen timestamp = niet tellen
+    try { return getMonthKey(new Date(ts).getTime())===curMonthKey; }
+    catch(e){ return false; }
+  }).reduce((s,t)=>s+(POINTS_MAP[t.prioriteit]||10),0);
   const scoreboardData=familyMembers.map(m=>({...m,points:calcPts(m.naam),doneTasks:tasks.filter(t=>t.gedaan&&t.gedaan_door===m.naam&&t.toegevoegd_door!==m.naam).length})).sort((a,b)=>b.points-a.points);
   const filteredTasks=tasks.filter(t=>{ if(taskFilter==="mijn")return t.toegewezen_aan===currentUser.naam; if(taskFilter==="open")return!t.gedaan; if(taskFilter==="klaar")return t.gedaan; return true; });
 
@@ -764,7 +777,39 @@ function AppShell({ currentUser, onLogout }) {
                   {familyMembers.map(m=><Chip key={m.naam} label={m.naam} active={filterMember===m.naam} color={m.kleur||"#8E8E93"} onClick={()=>setFilterMember(m.naam)} small />)}
                 </div>
               </div>
-              {calView==="dag"&&<div style={{ flex:1,overflowY:"auto" }}>{HOURS.map(hour=>{ const evs=getEvtsForDate(calDate).filter(e=>parseInt(e.begintijd)===hour); return(<div key={hour} style={{ display:"flex",minHeight:50,borderBottom:"1px solid #E5E5EA" }}><div style={{ width:48,padding:"5px 8px 0",fontSize:10,color:"#8E8E93",fontWeight:600,textAlign:"right",flexShrink:0 }}>{String(hour).padStart(2,"0")}:00</div><div style={{ flex:1,padding:"3px 8px",display:"flex",flexDirection:"column",gap:2 }}>{evs.map(ev=><CalPill key={ev.id} event={ev} onClick={()=>setSelectedEvent(ev)} getCatInfo={getCatInfo} getMember={getMember} />)}</div></div>); })}</div>}
+              {calView==="dag"&&<div style={{ flex:1,overflowY:"auto" }}>
+  <div style={{ position:"relative" }}>
+    {HOURS.map(hour=>(
+      <div key={hour} style={{ display:"flex",height:60,borderBottom:"1px solid #E5E5EA" }}>
+        <div style={{ width:48,padding:"5px 8px 0",fontSize:10,color:"#8E8E93",fontWeight:600,textAlign:"right",flexShrink:0 }}>{String(hour).padStart(2,"0")}:00</div>
+        <div style={{ flex:1 }} />
+      </div>
+    ))}
+    <div style={{ position:"absolute",top:0,left:48,right:0 }}>
+      {getEvtsForDate(calDate).map(ev=>{
+        if(ev.begintijd==="allday") return null;
+        const [sh,sm]=(ev.begintijd||"09:00").split(":").map(Number);
+        const [eh,em]=(ev.eindtijd||"10:00").split(":").map(Number);
+        const startMins=(sh-7)*60+sm;
+        const endMins=(eh-7)*60+em;
+        const durMins=Math.max(endMins-startMins,30);
+        const top=(startMins/60)*60;
+        const height=(durMins/60)*60;
+        const cat=getCatInfo(ev.categorie);
+        return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:4,right:4,top,height:Math.max(height,28),background:cat.color,borderRadius:6,padding:"3px 6px",cursor:"pointer",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}>
+          <div style={{ fontSize:11,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>
+          <div style={{ fontSize:9,color:"rgba(255,255,255,0.85)" }}>{ev.begintijd}–{ev.eindtijd}</div>
+        </div>;
+      })}
+      {getEvtsForDate(calDate).filter(ev=>ev.begintijd==="allday").map(ev=>{
+        const cat=getCatInfo(ev.categorie);
+        return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ margin:"2px 4px",background:cat.color,borderRadius:6,padding:"4px 8px",cursor:"pointer" }}>
+          <div style={{ fontSize:11,fontWeight:800,color:"#fff" }}>📅 {ev.titel}</div>
+        </div>;
+      })}
+    </div>
+  </div>
+</div>}
               {calView==="week"&&<div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}><div style={{ display:"flex",background:"#fff",borderBottom:"1px solid #E5E5EA",flexShrink:0 }}><div style={{ width:38 }} />{weekDays.map((d,i)=><div key={i} onClick={()=>{setCalDate(d);setCalView("dag");}} style={{ flex:1,textAlign:"center",padding:"6px 2px",cursor:"pointer" }}><div style={{ fontSize:9,color:"#8E8E93",fontWeight:700,textTransform:"uppercase" }}>{NL_DAYS_SHORT[d.getDay()]}</div><div style={{ width:24,height:24,borderRadius:12,margin:"2px auto",background:isToday(d)?"#007AFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:isToday(d)?"#fff":"#000" }}>{d.getDate()}</div></div>)}</div><div style={{ flex:1,overflowY:"auto" }}>{HOURS.map(hour=><div key={hour} style={{ display:"flex",minHeight:44,borderBottom:"1px solid #F0F0F0" }}><div style={{ width:38,padding:"4px 6px 0",fontSize:9,color:"#8E8E93",fontWeight:600,textAlign:"right",flexShrink:0 }}>{String(hour).padStart(2,"0")}:00</div>{weekDays.map((d,di)=>{ const evs=getEvtsForDate(d).filter(e=>parseInt(e.begintijd)===hour); return<div key={di} style={{ flex:1,padding:"2px 1px",borderLeft:"1px solid #F0F0F0" }}>{evs.map(ev=><div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ background:getCatInfo(ev.categorie).color,color:"#fff",borderRadius:3,padding:"1px 3px",fontSize:8,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:1,cursor:"pointer" }}>{ev.titel}</div>)}</div>; })}</div>)}</div></div>}
               {calView==="maand"&&<div style={{ flex:1,overflowY:"auto" }}><div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"#fff",borderBottom:"1px solid #E5E5EA" }}>{["ma","di","wo","do","vr","za","zo"].map(d=><div key={d} style={{ textAlign:"center",padding:"6px 0",fontSize:10,fontWeight:700,color:"#8E8E93",textTransform:"uppercase" }}>{d}</div>)}</div><div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)" }}>{getMonthDays(calDate).map((d,i)=>{ const evs=getEvtsForDate(d); const isCur=d.getMonth()===calDate.getMonth(); return<div key={i} onClick={()=>{setCalDate(d);setCalView("dag");}} style={{ minHeight:58,padding:"4px 2px 2px",borderRight:"1px solid #E5E5EA",borderBottom:"1px solid #E5E5EA",background:isToday(d)?"#EBF4FF":"#fff",cursor:"pointer",opacity:isCur?1:0.35 }}><div style={{ width:20,height:20,borderRadius:10,margin:"0 auto 2px",background:isToday(d)?"#007AFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:isToday(d)?700:500,color:isToday(d)?"#fff":"#000" }}>{d.getDate()}</div>{evs.slice(0,2).map(ev=><div key={ev.id} style={{ background:getCatInfo(ev.categorie).color,color:"#fff",borderRadius:2,padding:"0 3px",fontSize:8,fontWeight:600,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>)}{evs.length>2&&<div style={{ fontSize:8,color:"#8E8E93",textAlign:"center" }}>+{evs.length-2}</div>}</div>; })}</div></div>}
               <div style={{ background:"#fff",padding:"6px 14px",borderTop:"1px solid #E5E5EA",flexShrink:0 }}>
@@ -830,7 +875,34 @@ function AppShell({ currentUser, onLogout }) {
         {/* Sheets */}
         {showAddItem&&<Sheet onClose={()=>setShowAddItem(false)}><SheetTitle icon={listInfo.icon} title={`Toevoegen aan ${listInfo.label}`} sub={currentUser.naam} subColor={listInfo.color} /><FieldBox><input value={newItem.naam} onChange={e=>setNewItem({...newItem,naam:e.target.value})} onKeyDown={e=>e.key==="Enter"&&addShopItem()} placeholder="Naam van artikel..." style={INP} /></FieldBox><div style={{ display:"flex",gap:8,marginBottom:10 }}><FieldBox style={{ flex:1 }}><input type="number" value={newItem.hoeveelheid} onChange={e=>setNewItem({...newItem,hoeveelheid:e.target.value})} style={INP} /></FieldBox><FieldBox style={{ flex:1 }}><input value={newItem.eenheid} placeholder="eenheid" onChange={e=>setNewItem({...newItem,eenheid:e.target.value})} style={INP} /></FieldBox></div><div style={{ display:"flex",flexWrap:"wrap",gap:5,marginBottom:14 }}>{cats.map(cat=><Chip key={cat.id} label={cat.label} active={(newItem.categorie||cats[0]?.id)===cat.id} color={cat.color} onClick={()=>setNewItem({...newItem,categorie:cat.id})} />)}</div><ActionBtn color={listInfo.color} onClick={addShopItem}>Toevoegen</ActionBtn></Sheet>}
 
-        {showAddEvent&&<Sheet onClose={()=>setShowAddEvent(false)}><SheetTitle icon="📅" title="Afspraak toevoegen" sub={currentUser.naam} subColor="#007AFF" /><FieldBox><input value={newEvent.titel} onChange={e=>setNewEvent({...newEvent,titel:e.target.value})} placeholder="Titel afspraak..." style={INP} /></FieldBox><FieldBox><input type="date" value={newEvent.datum} onChange={e=>setNewEvent({...newEvent,datum:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox><div style={{ display:"flex",gap:8,marginBottom:10 }}><FieldBox style={{ flex:1 }}><input type="time" value={newEvent.begintijd} onChange={e=>setNewEvent({...newEvent,begintijd:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox><div style={{ display:"flex",alignItems:"center",color:"#8E8E93",fontSize:12 }}>tot</div><FieldBox style={{ flex:1 }}><input type="time" value={newEvent.eindtijd} onChange={e=>setNewEvent({...newEvent,eindtijd:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox></div><FieldBox><input value={newEvent.locatie} onChange={e=>setNewEvent({...newEvent,locatie:e.target.value})} placeholder="📍 Locatie" style={INP} /></FieldBox><div style={{ display:"flex",flexWrap:"wrap",gap:5,margin:"10px 0 14px" }}>{CAL_CATS.map(cat=><Chip key={cat.id} label={cat.label.split(" ")[0]} active={newEvent.categorie===cat.id} color={cat.color} onClick={()=>setNewEvent({...newEvent,categorie:cat.id})} small />)}</div><ActionBtn color="#007AFF" onClick={addEvent}>Afspraak toevoegen</ActionBtn></Sheet>}
+        {showAddEvent&&<Sheet onClose={()=>setShowAddEvent(false)}>
+          <SheetTitle icon="📅" title="Afspraak toevoegen" sub={currentUser.naam} subColor="#007AFF" />
+          <FieldBox><input value={newEvent.titel} onChange={e=>setNewEvent({...newEvent,titel:e.target.value})} placeholder="Titel afspraak..." style={INP} /></FieldBox>
+          <FieldBox><input type="date" value={newEvent.datum} onChange={e=>setNewEvent({...newEvent,datum:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox>
+          {/* Full day toggle */}
+          <div onClick={()=>setNewEvent({...newEvent,begintijd:newEvent.begintijd==="allday"?"09:00":"allday",eindtijd:newEvent.begintijd==="allday"?"10:00":"allday"})} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fff",borderRadius:10,marginBottom:8,cursor:"pointer" }}>
+            <div style={{ width:24,height:24,borderRadius:12,background:newEvent.begintijd==="allday"?"#007AFF":"#E5E5EA",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s" }}>
+              {newEvent.begintijd==="allday"&&<span style={{ color:"#fff",fontSize:14 }}>✓</span>}
+            </div>
+            <div style={{ fontSize:14,fontWeight:600,color:"#000" }}>Hele dag</div>
+          </div>
+          {newEvent.begintijd!=="allday"&&<div style={{ display:"flex",gap:8,marginBottom:10 }}>
+            <FieldBox style={{ flex:1 }}><input type="time" value={newEvent.begintijd} onChange={e=>{
+              const start=e.target.value;
+              const [sh,sm]=start.split(":").map(Number);
+              const endH=String(sh+1).padStart(2,"0");
+              const endTime=`${endH}:${String(sm).padStart(2,"0")}`;
+              setNewEvent({...newEvent,begintijd:start,eindtijd:newEvent.eindtijd<start?endTime:newEvent.eindtijd});
+            }} style={{...INP,fontSize:13}} /></FieldBox>
+            <div style={{ display:"flex",alignItems:"center",color:"#8E8E93",fontSize:12 }}>tot</div>
+            <FieldBox style={{ flex:1 }}><input type="time" value={newEvent.eindtijd} min={newEvent.begintijd} onChange={e=>setNewEvent({...newEvent,eindtijd:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox>
+          </div>}
+          <FieldBox><input value={newEvent.locatie} onChange={e=>setNewEvent({...newEvent,locatie:e.target.value})} placeholder="📍 Locatie" style={INP} /></FieldBox>
+          <div style={{ display:"flex",flexWrap:"wrap",gap:5,margin:"10px 0 14px" }}>{CAL_CATS.map(cat=><Chip key={cat.id} label={cat.label.split(" ")[0]} active={newEvent.categorie===cat.id} color={cat.color} onClick={()=>setNewEvent({...newEvent,categorie:cat.id})} small />)}</div>
+          <div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6 }}>VOOR WIE</div>
+          <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>{familyMembers.map(m=><div key={m.naam} onClick={()=>setNewEvent({...newEvent,lid:m.naam})} style={{ padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,background:(newEvent.lid||currentUser.naam)===m.naam?(m.kleur||"#007AFF"):"#E5E5EA",color:(newEvent.lid||currentUser.naam)===m.naam?"#fff":"#3A3A3C",cursor:"pointer" }}>{m.emoji||""} {m.naam}</div>)}</div>
+          <ActionBtn color="#007AFF" onClick={addEvent}>Afspraak toevoegen</ActionBtn>
+        </Sheet>}
 
         {showAddTask&&<Sheet onClose={()=>setShowAddTask(false)}><SheetTitle icon="✅" title="Nieuwe taak" sub={currentUser.naam} subColor="#5856D6" /><FieldBox><input value={newTask.titel} onChange={e=>setNewTask({...newTask,titel:e.target.value})} onKeyDown={e=>e.key==="Enter"&&addTask()} placeholder="Wat moet er gedaan worden?" style={INP} /></FieldBox><div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6,marginTop:4 }}>TOEWIJZEN AAN</div><div style={{ display:"flex",gap:6,marginBottom:10,flexWrap:"wrap" }}>{familyMembers.map(m=><div key={m.naam} onClick={()=>setNewTask({...newTask,toegewezen_aan:m.naam})} style={{ flex:"1 0 40%",padding:"8px 0",borderRadius:12,textAlign:"center",fontSize:11,fontWeight:700,background:newTask.toegewezen_aan===m.naam?(m.kleur||"#8E8E93"):"#E5E5EA",color:newTask.toegewezen_aan===m.naam?"#fff":"#3A3A3C",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4 }}><AV naam={m.naam} size={32} fsize={16} />{m.naam}</div>)}</div><div style={{ fontSize:12,fontWeight:700,color:"#8E8E93",marginBottom:6 }}>PRIORITEIT</div><div style={{ display:"flex",gap:6,marginBottom:10 }}>{[["laag","🟢"],["normaal","🟡"],["hoog","🔴"]].map(([p2,ic])=><div key={p2} onClick={()=>setNewTask({...newTask,prioriteit:p2})} style={{ flex:1,padding:"8px 0",borderRadius:12,textAlign:"center",fontSize:12,fontWeight:700,background:newTask.prioriteit===p2?"#5856D6":"#E5E5EA",color:newTask.prioriteit===p2?"#fff":"#3A3A3C",cursor:"pointer" }}>{ic} {p2.charAt(0).toUpperCase()+p2.slice(1)}</div>)}</div><div style={{ display:"flex",flexWrap:"wrap",gap:5,marginBottom:10 }}>{TASK_CATS.map(cat=><Chip key={cat.id} label={cat.label} active={newTask.categorie===cat.id} color={cat.color} onClick={()=>setNewTask({...newTask,categorie:cat.id})} />)}</div><FieldBox><input value={newTask.deadline} type="date" onChange={e=>setNewTask({...newTask,deadline:e.target.value})} style={{...INP,fontSize:13}} /></FieldBox><ActionBtn color="#5856D6" onClick={addTask}>Taak toevoegen</ActionBtn></Sheet>}
 
