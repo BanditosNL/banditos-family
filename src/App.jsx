@@ -392,22 +392,46 @@ function AppShell({ currentUser, onLogout }) {
     document.title = unread > 0 ? `(${unread}) 🤠 Banditos Family` : '🤠 Banditos Family';
   }, [messages, lastReadAt, currentUser.naam]);
 
-  // Push notificaties registreren
+  // Push: als al toestemming gegeven, update state
   useEffect(()=>{
-    if(!supabase) return;
-    if(Notification?.permission === "granted"){
-      supabase.auth.getUser().then(({ data }) => {
-        if(data?.user?.id) registerPush(data.user.id, currentUser.gezin_code).then(ok=>{ if(ok) setPushGranted(true); });
-      });
+    if(typeof Notification !== "undefined" && Notification.permission === "granted"){
+      setPushGranted(true);
     }
-  }, [currentUser.gezin_code]);
+  }, []);
 
   const requestPush = async () => {
-    if(!supabase) return;
-    const { data } = await supabase.auth.getUser();
-    if(data?.user?.id){
-      const ok = await registerPush(data.user.id, currentUser.gezin_code);
-      if(ok) setPushGranted(true);
+    try {
+      // 1. Check browser support
+      if(!("Notification" in window)){ alert("Deze browser ondersteunt geen meldingen"); return; }
+      if(!("serviceWorker" in navigator)){ alert("Service Worker niet ondersteund"); return; }
+
+      // 2. Ask permission
+      const permission = await Notification.requestPermission();
+      if(permission !== "granted"){ alert("Toestemming geweigerd — je kunt dit later aanpassen in je telefooninstellingen"); setPushGranted(true); return; }
+
+      // 3. Get service worker
+      const reg = await navigator.serviceWorker.ready;
+
+      // 4. Subscribe to push
+      const VAPID_PUBLIC_KEY = "BMSHAJ0wmDJp2bdR6wJc6q2v5WejYQA7vi3uQ8FMmk1TP4W5vY75okLCsR--FJ9dwWrgLSc_GTPN7WM1zfEKdYg";
+      const keyBytes = Uint8Array.from(atob(VAPID_PUBLIC_KEY.replace(/-/g,"+").replace(/_/g,"/")), c=>c.charCodeAt(0));
+      const subscription = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:keyBytes });
+
+      // 5. Save to Supabase
+      if(supabase) {
+        const { data } = await supabase.auth.getUser();
+        await supabase.from("push_subscriptions").upsert({
+          user_id: data?.user?.id,
+          gezin_code: currentUser.gezin_code,
+          subscription: subscription.toJSON()
+        });
+      }
+
+      setPushGranted(true);
+    } catch(err) {
+      console.error("Push fout:", err);
+      alert("Meldingen inschakelen mislukt: " + err.message);
+      setPushGranted(true); // dismiss popup anyway
     }
   };
 
