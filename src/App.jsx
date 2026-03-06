@@ -312,13 +312,7 @@ function AppShell({ currentUser, onLogout }) {
   const [mainTab,setMainTab] = useState("chat");
   const [appError,setAppError] = useState(null);
   const [pushGranted,setPushGranted] = useState(()=>typeof Notification!=="undefined"&&Notification?.permission==="granted");
-  const [showPushPopup,setShowPushPopup] = useState(false);
-  useEffect(()=>{ 
-    const t = setTimeout(()=>{
-      if(typeof Notification!=="undefined" && Notification.permission!=="granted") setShowPushPopup(true);
-    }, 1500);
-    return ()=>clearTimeout(t);
-  },[]);
+  const [showPushPopup,setShowPushPopup] = useState(()=>typeof Notification!=="undefined"&&Notification?.permission!=="granted");
   const [lastReadAt,setLastReadAt] = useState(()=>{ 
     try { return parseInt(localStorage.getItem("banditos_lastread_"+currentUser?.id)||"0"); } 
     catch(e){ return 0; }
