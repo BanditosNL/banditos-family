@@ -784,14 +784,6 @@ function AppShell({ currentUser, onLogout }) {
           )}
         </div>
 
-        {/* Push banner — boven tab bar */}
-        {!pushGranted && typeof Notification !== "undefined" && Notification.permission !== "denied" && (
-          <div style={{ background:"linear-gradient(135deg,#FF6B35,#FF9F0A)", padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:15 }}>
-            <div style={{ color:"#fff", fontSize:13, fontWeight:700 }}>🔔 Meldingen aanzetten?</div>
-            <div onClick={requestPush} style={{ color:"#fff", fontSize:13, fontWeight:800, background:"rgba(0,0,0,0.25)", padding:"8px 16px", borderRadius:20, cursor:"pointer", WebkitTapHighlightColor:"transparent", userSelect:"none" }}>Aanzetten</div>
-          </div>
-        )}
-
         {/* Tab bar */}
         <div style={{ background:"#fff",borderTop:"1px solid rgba(0,0,0,0.1)",display:"flex",padding:"6px 4px 20px",flexShrink:0 }}>
           {TABS.map(tab=><div key={tab.id} onClick={()=>tab.id==="chat" ? openChat() : setMainTab(tab.id)} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",position:"relative" }}><span style={{ fontSize:22 }}>{tab.icon}</span><span style={{ fontSize:9,fontWeight:700,color:mainTab===tab.id?accent():"#8E8E93" }}>{tab.label}</span>{tab.badge>0&&<div style={{ position:"absolute",top:-1,right:"8%",background:"#FF3B30",color:"#fff",minWidth:16,height:16,borderRadius:8,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",border:"2px solid #fff" }}>{tab.badge}</div>}{mainTab===tab.id&&<div style={{ width:4,height:4,borderRadius:2,background:accent(),marginTop:1 }} />}</div>)}
@@ -815,6 +807,25 @@ function AppShell({ currentUser, onLogout }) {
 
         <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}*{-webkit-tap-highlight-color:transparent}::-webkit-scrollbar{display:none}input::placeholder{color:#aaa}`}</style>
       </div>
+
+      {/* Push notificatie popup — buiten het telefoon frame */}
+      {!pushGranted && typeof Notification !== "undefined" && Notification.permission !== "denied" && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div style={{ background:"#fff", borderRadius:24, padding:"28px 24px", maxWidth:320, width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize:56, marginBottom:12 }}>🔔</div>
+            <div style={{ fontSize:20, fontWeight:800, color:"#000", marginBottom:8 }}>Meldingen aanzetten</div>
+            <div style={{ fontSize:14, color:"#8E8E93", lineHeight:1.5, marginBottom:24 }}>
+              Krijg een melding als iemand een nieuw bericht stuurt, ook als de app dicht is.
+            </div>
+            <button onClick={requestPush} style={{ width:"100%", background:"#FF6B35", border:"none", borderRadius:14, padding:"16px", color:"#fff", fontSize:16, fontWeight:800, cursor:"pointer", marginBottom:10 }}>
+              Ja, zet meldingen aan 🤠
+            </button>
+            <button onClick={()=>setPushGranted(true)} style={{ width:"100%", background:"none", border:"none", color:"#8E8E93", fontSize:14, cursor:"pointer", padding:"8px" }}>
+              Niet nu
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
