@@ -311,7 +311,14 @@ function AppShell({ currentUser, onLogout }) {
 
   const [mainTab,setMainTab] = useState("chat");
   const [appError,setAppError] = useState(null);
-  const [pushGranted,setPushGranted] = useState(()=>Notification?.permission==="granted");
+  const [pushGranted,setPushGranted] = useState(()=>typeof Notification!=="undefined"&&Notification?.permission==="granted");
+  const [showPushPopup,setShowPushPopup] = useState(false);
+  useEffect(()=>{ 
+    const t = setTimeout(()=>{
+      if(typeof Notification!=="undefined" && Notification.permission!=="granted") setShowPushPopup(true);
+    }, 1500);
+    return ()=>clearTimeout(t);
+  },[]);
   const [lastReadAt,setLastReadAt] = useState(()=>{ 
     try { return parseInt(localStorage.getItem("banditos_lastread_"+currentUser?.id)||"0"); } 
     catch(e){ return 0; }
@@ -428,10 +435,11 @@ function AppShell({ currentUser, onLogout }) {
       }
 
       setPushGranted(true);
+      setShowPushPopup(false);
     } catch(err) {
       console.error("Push fout:", err);
       alert("Meldingen inschakelen mislukt: " + err.message);
-      setPushGranted(true); // dismiss popup anyway
+      setShowPushPopup(false);
     }
   };
 
@@ -833,7 +841,7 @@ function AppShell({ currentUser, onLogout }) {
       </div>
 
       {/* Push notificatie popup — buiten het telefoon frame */}
-      {!pushGranted && typeof Notification !== "undefined" && Notification.permission !== "denied" && (
+      {showPushPopup && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:"#fff", borderRadius:24, padding:"28px 24px", maxWidth:320, width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.4)" }}>
             <div style={{ fontSize:56, marginBottom:12 }}>🔔</div>
@@ -844,7 +852,7 @@ function AppShell({ currentUser, onLogout }) {
             <button onClick={requestPush} style={{ width:"100%", background:"#FF6B35", border:"none", borderRadius:14, padding:"16px", color:"#fff", fontSize:16, fontWeight:800, cursor:"pointer", marginBottom:10 }}>
               Ja, zet meldingen aan 🤠
             </button>
-            <button onClick={()=>setPushGranted(true)} style={{ width:"100%", background:"none", border:"none", color:"#8E8E93", fontSize:14, cursor:"pointer", padding:"8px" }}>
+            <button onClick={()=>setShowPushPopup(false)} style={{ width:"100%", background:"none", border:"none", color:"#8E8E93", fontSize:14, cursor:"pointer", padding:"8px" }}>
               Niet nu
             </button>
           </div>
