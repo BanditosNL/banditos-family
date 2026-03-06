@@ -311,6 +311,7 @@ function AppShell({ currentUser, onLogout }) {
 
   const [mainTab,setMainTab] = useState("chat");
   const [appError,setAppError] = useState(null);
+  const [pushGranted,setPushGranted] = useState(()=>Notification?.permission==="granted");
   const [lastReadAt,setLastReadAt] = useState(()=>{ 
     try { return parseInt(localStorage.getItem("banditos_lastread_"+currentUser?.id)||"0"); } 
     catch(e){ return 0; }
@@ -394,10 +395,21 @@ function AppShell({ currentUser, onLogout }) {
   // Push notificaties registreren
   useEffect(()=>{
     if(!supabase) return;
-    supabase.auth.getUser().then(({ data }) => {
-      if(data?.user?.id) registerPush(data.user.id, currentUser.gezin_code);
-    });
+    if(Notification?.permission === "granted"){
+      supabase.auth.getUser().then(({ data }) => {
+        if(data?.user?.id) registerPush(data.user.id, currentUser.gezin_code).then(ok=>{ if(ok) setPushGranted(true); });
+      });
+    }
   }, [currentUser.gezin_code]);
+
+  const requestPush = async () => {
+    if(!supabase) return;
+    const { data } = await supabase.auth.getUser();
+    if(data?.user?.id){
+      const ok = await registerPush(data.user.id, currentUser.gezin_code);
+      if(ok) setPushGranted(true);
+    }
+  };
 
   const getMember = useCallback(naam=>{ return familyMembers.find(m=>m.naam===naam)||{ naam, kleur:MEMBER_COLORS[0], emoji:"👤", avatar_url:null }; },[familyMembers]);
 
@@ -583,6 +595,14 @@ function AppShell({ currentUser, onLogout }) {
             </div>
           </div>
         </div>
+
+        {/* Push banner */}
+        {!pushGranted && "Notification" in window && (
+          <div onClick={requestPush} style={{ background:"linear-gradient(135deg,#FF6B35,#FF9F0A)", padding:"10px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", flexShrink:0 }}>
+            <div style={{ color:"#fff", fontSize:13, fontWeight:700 }}>🔔 Zet meldingen aan</div>
+            <div style={{ color:"rgba(255,255,255,0.9)", fontSize:12, background:"rgba(0,0,0,0.2)", padding:"4px 10px", borderRadius:10 }}>Aanzetten →</div>
+          </div>
+        )}
 
         {/* Content */}
         <div style={{ flex:1,background:"#F2F2F7",overflow:"hidden",display:"flex",flexDirection:"column" }}>
