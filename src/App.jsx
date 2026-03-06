@@ -466,7 +466,7 @@ function AppShell({ currentUser, onLogout }) {
   // ── Tasks ──
   const addTask = async()=>{
     if(!newTask.titel.trim()) return;
-    const t={ ...newTask, toegevoegd_door:currentUser.naam, gedaan:false, gezin_code:gc, aangemaakt_op:new Date().toISOString() };
+    const t={ ...newTask, toegevoegd_door:currentUser.naam, gedaan:false, gezin_code:gc, aangemaakt_op:new Date().toISOString(), deadline:newTask.deadline||null };
     if(supabase) await supabase.from("taken").insert(t);
     else setTasks(p=>[{...t,id:Date.now()},...p]);
     setNewTask({ titel:"", categorie:"thuis", toegewezen_aan:currentUser.naam, prioriteit:"normaal", deadline:"", notities:"" });
@@ -489,6 +489,7 @@ function AppShell({ currentUser, onLogout }) {
   // ── Events ──
   const addEvent = async()=>{
     if(!newEvent.titel.trim()) return;
+    // ensure empty strings become null
     const e={ ...newEvent, lid:currentUser.naam, gezin_code:gc };
     if(supabase) await supabase.from("afspraken").insert(e);
     else setEvents(p=>[...p,{...e,id:Date.now()}]);
