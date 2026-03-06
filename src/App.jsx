@@ -776,32 +776,49 @@ function AppShell({ currentUser, onLogout }) {
                 </div>
               </div>
               {calView==="dag"&&<div style={{ flex:1,overflowY:"auto" }}>
-  {/* All-day events at top */}
-  {getEvtsForDate(calDate).filter(ev=>ev.begintijd==="allday").map(ev=>(
-    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ margin:"4px 8px",background:getCatInfo(ev.categorie).color,borderRadius:8,padding:"6px 10px",cursor:"pointer" }}>
-      <div style={{ fontSize:13,fontWeight:800,color:"#fff" }}>📅 {ev.titel} — hele dag</div>
-    </div>
-  ))}
-  {/* Timed grid */}
   <div style={{ position:"relative" }}>
+    {/* Hour grid */}
     {HOURS.map(hour=>(
       <div key={hour} style={{ display:"flex",height:60,borderBottom:"1px solid #E5E5EA" }}>
         <div style={{ width:48,padding:"5px 8px 0",fontSize:10,color:"#8E8E93",fontWeight:600,textAlign:"right",flexShrink:0 }}>{String(hour).padStart(2,"0")}:00</div>
         <div style={{ flex:1 }} />
       </div>
     ))}
+    {/* All events positioned absolutely */}
     <div style={{ position:"absolute",top:0,left:48,right:0 }}>
-      {getEvtsForDate(calDate).filter(ev=>ev.begintijd!=="allday").map(ev=>{
-        const [sh,sm]=(ev.begintijd||"09:00").split(":").map(Number);
-        const [eh,em]=(ev.eindtijd||"10:00").split(":").map(Number);
-        const startMins=(sh-7)*60+sm;
-        const durMins=Math.max((eh-7)*60+em-startMins,30);
-        const top=(startMins/60)*60;
-        const height=(durMins/60)*60;
+      {getEvtsForDate(calDate).map(ev=>{
         const cat=getCatInfo(ev.categorie);
-        return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:4,right:4,top,height:Math.max(height,28),background:cat.color,borderRadius:6,padding:"3px 6px",cursor:"pointer",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}>
-          <div style={{ fontSize:11,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>
-          <div style={{ fontSize:9,color:"rgba(255,255,255,0.85)" }}>{ev.begintijd}–{ev.eindtijd}</div>
+        const isAllDay=ev.begintijd==="allday";
+        const top=0;
+        const height=HOURS.length*60; // full grid height
+        const [sh,sm]=isAllDay?[7,0]:(ev.begintijd||"09:00").split(":").map(Number);
+        const [eh,em]=isAllDay?[7+HOURS.length,0]:(ev.eindtijd||"10:00").split(":").map(Number);
+        const startMins=isAllDay?0:(sh-7)*60+sm;
+        const durMins=isAllDay?HOURS.length*60:Math.max((eh-7)*60+em-startMins,30);
+        const t=(startMins/60)*60;
+        const h=isAllDay?height:(durMins/60)*60;
+        return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ 
+          position:"absolute",
+          left: isAllDay?0:4,
+          right: isAllDay?0:4,
+          top:t,
+          height:Math.max(h,28),
+          background:isAllDay?cat.color+"33":cat.color,
+          borderLeft:isAllDay?`4px solid ${cat.color}`:"none",
+          borderRadius:isAllDay?0:6,
+          padding:"3px 6px",
+          cursor:"pointer",
+          overflow:"hidden",
+          boxShadow:isAllDay?"none":"0 1px 4px rgba(0,0,0,0.2)",
+          zIndex:isAllDay?0:1
+        }}>
+          {isAllDay
+            ? <div style={{ position:"sticky",top:4,fontSize:11,fontWeight:800,color:cat.color }}>📅 {ev.titel} — hele dag</div>
+            : <>
+                <div style={{ fontSize:11,fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>
+                <div style={{ fontSize:9,color:"rgba(255,255,255,0.85)" }}>{ev.begintijd}–{ev.eindtijd}</div>
+              </>
+          }
         </div>;
       })}
     </div>
@@ -816,18 +833,7 @@ function AppShell({ currentUser, onLogout }) {
       <div style={{ width:24,height:24,borderRadius:12,margin:"2px auto",background:isToday(d)?"#007AFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:isToday(d)?"#fff":"#000" }}>{d.getDate()}</div>
     </div>)}
   </div>
-  {/* All-day events row */}
-  {weekDays.some(d=>getEvtsForDate(d).some(e=>e.begintijd==="allday"))&&(
-    <div style={{ display:"flex",borderBottom:"1px solid #E5E5EA",background:"#F9F9F9",flexShrink:0 }}>
-      <div style={{ width:38,padding:"4px 2px",fontSize:8,color:"#8E8E93",textAlign:"right",flexShrink:0 }}>dag</div>
-      {weekDays.map((d,di)=>{
-        const allday=getEvtsForDate(d).filter(e=>e.begintijd==="allday");
-        return <div key={di} style={{ flex:1,borderLeft:"1px solid #F0F0F0",padding:"2px 1px" }}>
-          {allday.map(ev=><div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ background:getCatInfo(ev.categorie).color,color:"#fff",borderRadius:3,padding:"1px 3px",fontSize:7,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer",marginBottom:1 }}>{ev.titel}</div>)}
-        </div>;
-      })}
-    </div>
-  )}
+
   {/* Timed grid with positioned events */}
   <div style={{ flex:1,overflowY:"auto" }}>
     <div style={{ display:"flex" }}>
@@ -840,14 +846,20 @@ function AppShell({ currentUser, onLogout }) {
         <div key={di} style={{ flex:1,borderLeft:"1px solid #F0F0F0",position:"relative" }}>
           {/* Hour grid lines */}
           {HOURS.map(hour=><div key={hour} style={{ height:44,borderBottom:"1px solid #F0F0F0",boxSizing:"border-box" }} />)}
-          {/* Positioned events */}
-          {getEvtsForDate(d).filter(ev=>ev.begintijd!=="allday").map(ev=>{
+          {/* Positioned events — including allday */}
+          {getEvtsForDate(d).map(ev=>{
+            const cat=getCatInfo(ev.categorie);
+            const isAllDay=ev.begintijd==="allday";
+            const PX=44/60;
+            const totalH=HOURS.length*44;
+            if(isAllDay) return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:0,right:0,top:0,height:totalH,background:cat.color+"22",borderLeft:`3px solid ${cat.color}`,cursor:"pointer",zIndex:0,overflow:"hidden" }}>
+              <div style={{ position:"sticky",top:2,fontSize:7,fontWeight:800,color:cat.color,padding:"0 2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>📅 {ev.titel}</div>
+            </div>;
             const [sh,sm]=(ev.begintijd||"09:00").split(":").map(Number);
             const [eh,em]=(ev.eindtijd||"10:00").split(":").map(Number);
             const startMins=(sh-7)*60+sm;
             const durMins=Math.max((eh-7)*60+em-startMins,30);
-            const PX=44/60;
-            return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:1,right:1,top:startMins*PX,height:Math.max(durMins*PX,18),background:getCatInfo(ev.categorie).color,borderRadius:3,padding:"1px 3px",fontSize:7,fontWeight:700,color:"#fff",overflow:"hidden",cursor:"pointer",zIndex:1 }}>
+            return <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:"absolute",left:1,right:1,top:startMins*PX,height:Math.max(durMins*PX,18),background:cat.color,borderRadius:3,padding:"1px 3px",fontSize:7,fontWeight:700,color:"#fff",overflow:"hidden",cursor:"pointer",zIndex:1 }}>
               <div style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{ev.titel}</div>
             </div>;
           })}
